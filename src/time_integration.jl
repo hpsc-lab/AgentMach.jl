@@ -159,3 +159,49 @@ function compute_rhs!(du::AbstractArray{T,2},
 
     return du
 end
+
+"""
+    cfl_number(problem, dt)
+
+Compute the nondimensional Courant-Friedrichs-Lewy number for the provided
+linear advection problem and timestep length `dt`.
+"""
+function cfl_number(problem::LinearAdvectionProblem, dt::Real)
+    mesh_obj = mesh(problem)
+    vel = velocity(pde(problem))
+    dx, dy = spacing(mesh_obj)
+
+    ax = abs(vel[1])
+    ay = abs(vel[2])
+
+    dtT = float(dt)
+    termx = ax == 0 ? zero(dtT) : dtT * ax / dx
+    termy = ay == 0 ? zero(dtT) : dtT * ay / dy
+
+    return termx + termy
+end
+
+"""
+    stable_timestep(problem; cfl = 0.9)
+
+Return a timestep size that satisfies `cfl_number(problem, dt) <= cfl` for the
+explicit RK2 integrator. The default `cfl = 0.9` provides a modest safety margin
+under the ideal limit of 1.0.
+"""
+function stable_timestep(problem::LinearAdvectionProblem; cfl::Real = 0.9)
+    cfl > 0 || throw(ArgumentError("CFL target must be positive"))
+
+    mesh_obj = mesh(problem)
+    vel = velocity(pde(problem))
+    dx, dy = spacing(mesh_obj)
+
+    ax = abs(vel[1])
+    ay = abs(vel[2])
+
+    denom = (ax == 0 ? zero(float(cfl)) : ax / dx) +
+            (ay == 0 ? zero(float(cfl)) : ay / dy)
+
+    iszero(denom) && return Inf
+
+    return float(cfl) / denom
+end

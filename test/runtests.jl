@@ -88,3 +88,54 @@ end
         @test isapprox(u[i, 1], expected[i]; atol = 1e-3)
     end
 end
+
+@testset "CFL guidance" begin
+    problem = setup_linear_advection_problem(16, 8; velocity = (2.0, -1.0))
+    dt = stable_timestep(problem; cfl = 0.75)
+    @test isapprox(cfl_number(problem, dt), 0.75; atol = 1e-12)
+
+    half_dt = 0.5 * dt
+    @test isapprox(cfl_number(problem, half_dt), 0.375; atol = 1e-12)
+
+    zero_vel_problem = setup_linear_advection_problem(4, 4; velocity = (0.0, 0.0))
+    @test isinf(stable_timestep(zero_vel_problem))
+
+    @test_throws ArgumentError stable_timestep(problem; cfl = 0.0)
+end
+
+@testset "LinearAdvection driver" begin
+    nx = 64
+    problem = setup_linear_advection_problem(nx, 1; velocity = (1.0, 0.0))
+    mesh = CodexPar.mesh(problem)
+    centers_x, _ = CodexPar.cell_centers(mesh)
+    init_fun(x, _) = sin(2pi * x)
+    dx, _ = spacing(mesh)
+    dt = 0.25 * dx
+
+    state = LinearAdvectionState(problem; init = init_fun)
+    result = run_linear_advection!(state, problem; steps = 4, dt = dt, record_cfl = true)
+    expected = [sin(2pi * (x - 4 * dt)) for x in centers_x]
+    u = solution(state)
+    @inbounds for i in 1:nx
+        @test isapprox(u[i, 1], expected[i]; atol = 1e-3)
+    end
+    @test length(result.cfl_history) == 4
+    @test all(isapprox.(result.cfl_history, result.cfl; atol = 1e-12))
+
+    state_auto = LinearAdvectionState(problem; init = init_fun)
+    result_auto = run_linear_advection!(state_auto, problem; steps = 2, cfl_target = 0.5)
+    @test isapprox(result_auto.dt, stable_timestep(problem; cfl = 0.5); atol = 1e-12)
+    @test isapprox(result_auto.cfl, cfl_number(problem, result_auto.dt); atol = 1e-12)
+
+    @test_throws ArgumentError run_linear_advection!(state_auto, problem; steps = 0, dt = dt)
+end
+
+@testset "Examples" begin
+    include(joinpath(@__DIR__, "..", "examples", "linear_advection_demo.jl"))
+    result = run_linear_advection_demo(; nx = 16, ny = 1, steps = 2, cfl = 0.3, sample_every = 1)
+    @test result.steps == 2
+    @test result.dt > 0
+    @test result.final_time ≈ 2 * result.dt
+    @test !isempty(result.diagnostics)
+    @test result.cfl_history == fill(result.cfl, 2)
+end

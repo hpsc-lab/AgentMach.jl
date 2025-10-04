@@ -24,3 +24,25 @@ pkg> test
 ## Documentation
 
 The repository ships with a bare `docs/` folder ready to host Documenter.jl-based documentation if you choose to add it later. A GitHub Actions workflow is also included so CI runs tests on every push.
+
+## Example simulation
+
+The `examples/linear_advection_demo.jl` script wires together mesh generation,
+problem setup, RK2 time integration, and the high-level driver. Run it from the
+repository root:
+
+```bash
+julia --project=. examples/linear_advection_demo.jl
+```
+
+It prints periodic RMS diagnostics along with the CFL number used for the run.
+Tune parameters by editing the keyword arguments in `run_linear_advection_demo`.
+
+To capture diagnostics, pass output paths (created if missing):
+
+```bash
+julia --project=. examples/linear_advection_demo.jl diagnostics.csv final_state.csv
+```
+
+The first file lists sampled step/time/RMS/CFL data, and the second stores the
+final cell-centered field with coordinates.

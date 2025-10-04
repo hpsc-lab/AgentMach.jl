@@ -4,6 +4,7 @@ include("mesh.jl")
 include("boundary_conditions.jl")
 include("equations.jl")
 include("time_integration.jl")
+include("simulation.jl")
 
 export greet,
        StructuredMesh,
@@ -25,7 +26,10 @@ export greet,
        solution,
        workspace,
        compute_rhs!,
-       rk2_step!
+       rk2_step!,
+       cfl_number,
+       stable_timestep,
+       run_linear_advection!
 
 """
     greet(name::AbstractString = "world")
