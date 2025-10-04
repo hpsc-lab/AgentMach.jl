@@ -25,3 +25,6 @@ coverage/
 # Local Julia depot
 .julia/
 .julia-depot/
+
+# Local run and output directories
+run/
