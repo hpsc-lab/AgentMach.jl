@@ -132,10 +132,38 @@ end
 
 @testset "Examples" begin
     include(joinpath(@__DIR__, "..", "examples", "linear_advection_demo.jl"))
+    include(joinpath(@__DIR__, "..", "examples", "plot_linear_advection.jl"))
+
     result = run_linear_advection_demo(; nx = 16, ny = 1, steps = 2, cfl = 0.3, sample_every = 1)
     @test result.steps == 2
     @test result.dt > 0
     @test result.final_time ≈ 2 * result.dt
     @test !isempty(result.diagnostics)
     @test result.cfl_history == fill(result.cfl, 2)
+
+    mktempdir() do dir
+        diag_path = joinpath(dir, "diagnostics.csv")
+        state_path = joinpath(dir, "state.csv")
+        exported = run_linear_advection_demo(; nx = 8, ny = 1, steps = 3, cfl = 0.25,
+                                             sample_every = 1,
+                                             diagnostics_path = diag_path,
+                                             state_path = state_path)
+        @test isfile(diag_path)
+        @test isfile(state_path)
+        diag_lines = readlines(diag_path)
+        @test first(diag_lines) == "step,time,rms,cfl"
+        @test length(diag_lines) == length(exported.diagnostic_records) + 1
+        state_lines = readlines(state_path)
+        @test first(state_lines) == "i,j,x,y,u"
+        @test length(state_lines) == length(exported.final_state) + 1
+
+        plot_path = joinpath(dir, "plot.png")
+        try
+            out = plot_linear_advection_csv(diag_path; state_path = state_path, output_path = plot_path)
+            @test out == plot_path
+            @test isfile(plot_path)
+        catch err
+            @test err isa ArgumentError
+        end
+    end
 end

@@ -46,3 +46,15 @@ julia --project=. examples/linear_advection_demo.jl diagnostics.csv final_state.
 
 The first file lists sampled step/time/RMS/CFL data, and the second stores the
 final cell-centered field with coordinates.
+
+### Visualise results
+
+To render the sampled diagnostics (and optionally the final field), use the
+helper script:
+
+```bash
+julia --project=. examples/plot_linear_advection.jl diagnostics.csv final_state.csv plot.png
+```
+
+Install `Plots.jl` in your environment first (`import Pkg; Pkg.add("Plots")`).
+The script falls back to a readable error if the dependency is missing.
