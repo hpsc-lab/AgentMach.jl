@@ -1,0 +1,15 @@
+name = "CodexPar"
+uuid = "dbf7be03-f09c-4874-9d54-616eaa9cc35e"
+authors = ["Codex Team"]
+version = "0.1.0"
+
+[compat]
+julia = "1.9"
+
+[deps]
+
+[extras]
+Test = "8dfed614-e22c-5e08-9a4b-5b6611b2d0fe"
+
+[targets]
+test = ["Test"]

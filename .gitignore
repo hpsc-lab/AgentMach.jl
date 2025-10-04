@@ -1,0 +1,27 @@
+# Julia artifacts and build outputs
+*.jl.cov
+*.jl.mem
+*.dSYM/
+*.ji
+
+# Package manager files
+Manifest.toml
+
+# Documentation build artifacts
+docs/build/
+docs/site/
+
+# Generated notebooks or scratch
+notebooks/
+
+# VS Code / editors
+.vscode/
+.idea/
+.DS_Store
+
+# Coverage reports
+coverage/
+
+# Local Julia depot
+.julia/
+.julia-depot/
