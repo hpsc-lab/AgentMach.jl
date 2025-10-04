@@ -3,7 +3,9 @@ uuid = "dbf7be03-f09c-4874-9d54-616eaa9cc35e"
 authors = ["Codex Team"]
 version = "0.1.0"
 
-[compat]
-julia = "1.9"
-
 [deps]
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+
+[compat]
+Plots = "1.41.1"
+julia = "1.9"
