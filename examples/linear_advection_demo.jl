@@ -9,10 +9,11 @@ using CodexPar
 
 Run a periodic linear advection problem on a rectangular structured mesh whose
 cells are square (`Δx = Δy`) by allocating more cells along the longer x
-direction. The initial condition comprises a lattice of sine ``blobs`` that fits
 exactly four oscillations across x and two across y, giving circular level sets.
-Optionally write diagnostics and the final state to disk; visualization lives in
-`plot_linear_advection.jl`.
+The integration length is automatically increased so the advected field completes
+an integer number of domain traversals, bringing the final state back to the
+initial configuration. Optionally write diagnostics and the final state to disk;
+visualization lives in `plot_linear_advection.jl`.
 """
 function run_linear_advection_demo(; nx::Int = 256,
                                     ny::Int = 128,
@@ -31,19 +32,24 @@ function run_linear_advection_demo(; nx::Int = 256,
 
     nx_cells, ny_cells = _square_cell_counts(nx, ny, lengths_tuple)
 
-    sample_stride = isnothing(sample_every) ? max(1, steps ÷ 8) : sample_every
-    sample_stride > 0 || throw(ArgumentError("sample_every must be positive when provided"))
-
     problem = setup_linear_advection_problem(nx_cells, ny_cells;
                                              velocity = velocity,
                                              lengths = lengths_tuple)
     init_field = _sine_blob_initializer(lengths_tuple)
     state = LinearAdvectionState(problem; init = init_field)
 
+    dt_cfl = stable_timestep(problem; cfl = cfl)
+    target_time = _return_period(lengths_tuple, velocity)
+    total_steps = _select_step_count(steps, dt_cfl, target_time)
+    effective_dt = target_time > 0 ? target_time / total_steps : dt_cfl
+
+    sample_stride = isnothing(sample_every) ? max(1, total_steps ÷ 8) : sample_every
+    sample_stride > 0 || throw(ArgumentError("sample_every must be positive when provided"))
+
     rms_history = Float64[]
     records = Vector{NamedTuple{(:step, :time, :rms, :cfl), NTuple{4,Float64}}}()
     function record_callback(step, state, problem, dt)
-        if step % sample_stride == 0 || step == steps
+        if step % sample_stride == 0 || step == total_steps
             u = solution(state)
             rms = sqrt(sum(abs2, u) / length(u))
             time = step * dt
@@ -55,8 +61,8 @@ function run_linear_advection_demo(; nx::Int = 256,
     end
 
     summary = run_linear_advection!(state, problem;
-                                    steps = steps,
-                                    cfl_target = cfl,
+                                    steps = total_steps,
+                                    dt = effective_dt,
                                     callback = record_callback,
                                     record_cfl = true)
 
@@ -73,7 +79,8 @@ function run_linear_advection_demo(; nx::Int = 256,
                             diagnostic_records = records,
                             final_state = final_state,
                             nx = nx_cells,
-                            ny = ny_cells))
+                            ny = ny_cells,
+                            target_time = target_time))
 end
 
 function _write_diagnostics_csv(path::AbstractString,
@@ -128,6 +135,47 @@ function _square_cell_counts(nx::Int, ny::Int, lengths::NTuple{2,Float64})
     end
 end
 
+function _return_period(lengths::NTuple{2,Float64}, velocity::Tuple{<:Real,<:Real})
+    periods = Rational{Int}[]
+    Lx, Ly = lengths
+    vx, vy = velocity
+    tol = eps(Float64)
+
+    if !iszero(vx)
+        push!(periods, rationalize(Lx / abs(vx); tol = tol))
+    end
+    if !iszero(vy)
+        push!(periods, rationalize(Ly / abs(vy); tol = tol))
+    end
+
+    isempty(periods) && return 0.0
+
+    common = periods[1]
+    for p in Iterators.drop(periods, 1)
+        common = _lcm_rational(common, p)
+    end
+
+    return float(common)
+end
+
+function _lcm_rational(a::Rational{T}, b::Rational{T}) where {T<:Integer}
+    num = lcm(numerator(a), numerator(b))
+    den = gcd(denominator(a), denominator(b))
+    return num // den
+end
+
+function _select_step_count(requested_steps::Int, dt_cfl::Float64, target_time::Float64)
+    requested_steps > 0 || throw(ArgumentError("steps must be positive"))
+    if target_time <= 0
+        return requested_steps
+    end
+
+    ratio = target_time / dt_cfl
+    target_steps = Int(ceil(ratio - eps(Float64)))
+    target_steps = max(target_steps, 1)
+    return max(requested_steps, target_steps)
+end
+
 function _write_state_csv(path::AbstractString,
                           problem::LinearAdvectionProblem,
                           state::AbstractArray)
@@ -148,9 +196,9 @@ function main()
     diagnostics_path = length(ARGS) >= 1 ? ARGS[1] : nothing
     state_path = length(ARGS) >= 2 ? ARGS[2] : nothing
 
-    summary = run_linear_advection_demo(; diagnostics_path = diagnostics_path,
+    summary = run_linear_advection_demo(; nx=64, ny=32, diagnostics_path = diagnostics_path,
                                          state_path = state_path)
-    @info "Demo complete" final_time = summary.final_time dt = summary.dt cfl = summary.cfl samples = length(summary.diagnostics) nx = summary.nx ny = summary.ny
+    @info "Demo complete" final_time = summary.final_time dt = summary.dt cfl = summary.cfl samples = length(summary.diagnostics) nx = summary.nx ny = summary.ny target_time = summary.target_time
 
     if diagnostics_path !== nothing
         @info "Diagnostics written" path = diagnostics_path
