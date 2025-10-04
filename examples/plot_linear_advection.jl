@@ -2,27 +2,35 @@
 using Plots
 
 """
-    plot_linear_advection_csv(diagnostics_path; state_path=nothing,
-                               output_path="linear_advection.png",
-                               velocity=(1.0, 0.0))
+    plot_linear_advection_csv(diagnostics_path; state_path,
+                               heatmap_path="linear_advection_fields.pdf",
+                               profiles_path="linear_advection_profiles.pdf")
 
-Load diagnostics (and optionally final-state) CSV files produced by
-`linear_advection_demo.jl` and generate a PNG summary. When a state file is
-provided the plot includes a 2-D heatmap of the final field and a quantitative
-comparison against the exact solution along the domain diagonal, assuming the
-specified constant advection velocity.
+Load diagnostics and state CSV files produced by `linear_advection_demo.jl` and
+emit two PDF figures: one with side-by-side heatmaps of the analytical initial
+condition and the simulated final state, and another comparing initial vs final
+profiles along the domain diagonal and along the mid-plane in `y`.
 """
 function plot_linear_advection_csv(diagnostics_path::AbstractString;
                                    state_path::Union{Nothing,AbstractString} = nothing,
-                                   output_path::AbstractString = "linear_advection.png",
-                                   velocity::Tuple{<:Real,<:Real} = (1.0, 0.0))
+                                   heatmap_path::AbstractString = "linear_advection_fields.pdf",
+                                   profiles_path::AbstractString = "linear_advection_profiles.pdf")
     diagnostics = _read_diagnostics_csv(diagnostics_path)
-    state_records = state_path === nothing ? nothing : _read_state_csv(state_path)
+    state_path === nothing &&
+        throw(ArgumentError("State CSV is required to build heatmap and profile plots"))
+    state_records = _read_state_csv(state_path)
 
-    fig = _build_plot(diagnostics, state_records; velocity = velocity)
-    savefig(fig, output_path)
+    init_field = _build_initial_field(state_records)
 
-    return output_path
+    heatmap_fig = _build_heatmap_figure(state_records, init_field)
+    savefig(heatmap_fig, heatmap_path)
+
+    profiles_fig = _build_profiles_figure(state_records, init_field)
+    savefig(profiles_fig, profiles_path)
+
+    return (; diagnostics = diagnostics,
+            heatmap = heatmap_path,
+            profiles = profiles_path)
 end
 
 function _read_csv(path::AbstractString)
@@ -88,146 +96,134 @@ function _read_state_csv(path::AbstractString)
             u = field)
 end
 
-function _build_plot(diagnostics, state_records; velocity)
-    diagnostics_plot = plot(diagnostics.time, diagnostics.rms;
-                            xlabel = "Time",
-                            ylabel = "RMS",
-                            label = "RMS",
-                            title = "Linear Advection Diagnostics")
-
-    if state_records === nothing
-        return diagnostics_plot
-    end
-
-    data = state_records
+function _build_initial_field(data)
     nx, ny = size(data.u)
+    init = similar(data.u)
+    centers_x = data.x
+    centers_y = data.y
 
-    if nx == 1 || ny == 1
-        line_plot = plot(vec(data.x), vec(data.u);
-                         xlabel = "x",
-                         ylabel = "u",
-                         label = "Final state",
-                         title = "Final field (1-D)")
-        return plot(diagnostics_plot, line_plot; layout = (1, 2))
+    nx >= 1 || ny >= 1 || throw(ArgumentError("State field is empty"))
+
+    centers_x_vec = vec(centers_x[:, 1])
+    centers_y_vec = vec(centers_y[1, :])
+    dx = nx > 1 ? centers_x_vec[2] - centers_x_vec[1] : centers_y_vec[2] - centers_y_vec[1]
+    dy = ny > 1 ? centers_y_vec[2] - centers_y_vec[1] : dx
+    Lx = dx * nx
+    Ly = dy * ny
+
+    init_fun = _sine_blob_initializer((Lx, Ly))
+
+    @inbounds for j in 1:ny, i in 1:nx
+        init[i, j] = init_fun(centers_x[i, j], centers_y[i, j])
     end
 
-    heat = _build_heatmap(data)
-    diagonal = _build_diagonal_comparison(data, diagnostics; velocity = velocity)
-    return plot(diagnostics_plot, heat, diagonal; layout = (1, 3))
+    return init
 end
 
-function _build_heatmap(data)
+function _build_heatmap_figure(data, init_field)
     centers_x = vec(data.x[:, 1])
     centers_y = vec(data.y[1, :])
     nx = length(centers_x)
     ny = length(centers_y)
-    dx = nx > 1 ? centers_x[2] - centers_x[1] : 1.0
-    dy = ny > 1 ? centers_y[2] - centers_y[1] : 1.0
+    nx > 1 || ny > 1 || throw(ArgumentError("Final field is degenerate; need at least a 2-D state for heatmap"))
+    dx = nx > 1 ? centers_x[2] - centers_x[1] : centers_y[2] - centers_y[1]
+    dy = ny > 1 ? centers_y[2] - centers_y[1] : dx
     lx = max(dx * nx, eps())
     ly = max(dy * ny, eps())
     aspect = ly / lx
 
-    return heatmap(centers_x, centers_y, data.u;
-                   xlabel = "x",
-                   ylabel = "y",
-                   title = "Final field",
-                   colorbar = true,
-                   aspect_ratio = aspect)
+    init_plot = heatmap(centers_x, centers_y, init_field;
+                        xlabel = "x",
+                        ylabel = "y",
+                        title = "Initial field",
+                        colorbar = true,
+                        aspect_ratio = aspect)
+    final_plot = heatmap(centers_x, centers_y, data.u;
+                         xlabel = "x",
+                         ylabel = "y",
+                         title = "Final field",
+                         colorbar = true,
+                         aspect_ratio = aspect)
+
+    return plot(init_plot, final_plot; layout = (1, 2), size = (900, 400))
 end
 
-function _build_diagonal_comparison(data, diagnostics; velocity)
+function _build_profiles_figure(data, init_field)
     nx, ny = size(data.u)
     n_diag = min(nx, ny)
     idxs = collect(1:n_diag)
     x_diag = [data.x[i, i] for i in idxs]
-    y_diag = [data.y[i, i] for i in idxs]
     numerical = [data.u[i, i] for i in idxs]
+    initial_diag = [init_field[i, i] for i in idxs]
 
     centers_x = vec(data.x[:, 1])
     centers_y = vec(data.y[1, :])
-    dx = centers_x[2] - centers_x[1]
-    dy = centers_y[2] - centers_y[1]
+    nx >= 2 || ny >= 2 || throw(ArgumentError("Need at least a 2x2 mesh for profile extraction"))
+    dx = nx >= 2 ? centers_x[2] - centers_x[1] : centers_y[2] - centers_y[1]
+    dy = ny >= 2 ? centers_y[2] - centers_y[1] : dx
     lx = dx * nx
     ly = dy * ny
-    origin_x = centers_x[1] - dx / 2
     origin_y = centers_y[1] - dy / 2
 
-    final_time = isempty(diagnostics.time) ? 0.0 : diagnostics.time[end]
-    init_fun = _two_wave_initializer((lx, ly))
-    vx, vy = velocity
+    diagonal_plot = plot(x_diag, initial_diag;
+                         xlabel = "x along diagonal",
+                         ylabel = "u",
+                         label = "Initial",
+                         title = "Diagonal profile",
+                         legend = :bottomleft)
+    plot!(diagonal_plot, x_diag, numerical;
+          label = "Final")
 
-    exact = similar(numerical)
-    for k in eachindex(idxs)
-        x_adv = _wrap_coordinate(x_diag[k] - vx * final_time, origin_x, lx)
-        y_adv = _wrap_coordinate(y_diag[k] - vy * final_time, origin_y, ly)
-        exact[k] = init_fun(x_adv, y_adv)
-    end
+    y_mid = origin_y + ly / 2
+    j_center = argmin(abs.(centers_y .- y_mid))
+    x_line = data.x[:, j_center]
+    final_line = data.u[:, j_center]
+    initial_line = init_field[:, j_center]
 
-    plt = plot(x_diag, numerical;
-               xlabel = "x along diagonal",
-               ylabel = "u",
-               label = "Numerical",
-               title = "Diagonal comparison",
-               legend = :bottomleft)
-    plot!(plt, x_diag, exact;
-          label = "Exact")
-    return plt
+    center_plot = plot(x_line, initial_line;
+                       xlabel = "x at y = $(round(centers_y[j_center]; digits = 4))",
+                       ylabel = "u",
+                       label = "Initial",
+                       title = "Mid-plane profile",
+                       legend = :bottomleft)
+    plot!(center_plot, x_line, final_line;
+          label = "Final")
+
+    return plot(diagonal_plot, center_plot; layout = (1, 2), size = (900, 400))
 end
 
-function _two_wave_initializer(lengths::NTuple{2,<:Real})
+function _sine_blob_initializer(lengths::NTuple{2,<:Real})
     Lx, Ly = float.(lengths)
+    kx = 4
+    ky = 2
     function init(x, y)
-        term1 = sin(2pi * x / Lx) * cos(pi * y / Ly)
-        term2 = 0.5 * cos(4pi * x / Lx) * sin(2pi * y / Ly)
-        return term1 + term2
+        return sin(2pi * kx * x / Lx) * sin(2pi * ky * y / Ly)
     end
     return init
 end
 
-_wrap_coordinate(val, origin, length) = origin + mod(val - origin, length)
-
 function plot_main()
     nargs = length(ARGS)
-    if nargs < 1
-        println(stderr, "usage: julia plot_linear_advection.jl diagnostics.csv [state.csv] [output.png] [--velocity vx vy]")
+    if nargs < 2
+        println(stderr, "usage: julia plot_linear_advection.jl diagnostics.csv state.csv [heatmap.pdf] [profiles.pdf]")
         return 1
     end
 
     try
-        idx = 1
-        diagnostics_path = ARGS[idx]; idx += 1
+        diagnostics_path = ARGS[1]
+        state_path = ARGS[2]
 
-        state_path = nothing
-        if idx <= nargs && !startswith(ARGS[idx], "--")
-            state_path = ARGS[idx]
-            idx += 1
-        end
+        heatmap_path = nargs >= 3 ? ARGS[3] : "linear_advection_fields.pdf"
+        profiles_path = nargs >= 4 ? ARGS[4] : "linear_advection_profiles.pdf"
 
-        output_path = "linear_advection.png"
-        if idx <= nargs && !startswith(ARGS[idx], "--")
-            output_path = ARGS[idx]
-            idx += 1
-        end
-
-        velocity = (1.0, 0.0)
-        while idx <= nargs
-            arg = ARGS[idx]
-            if arg == "--velocity"
-                idx + 2 <= nargs || throw(ArgumentError("--velocity expects two numeric arguments"))
-                vx = parse(Float64, ARGS[idx + 1])
-                vy = parse(Float64, ARGS[idx + 2])
-                velocity = (vx, vy)
-                idx += 3
-            else
-                throw(ArgumentError("Unknown argument: $(arg)"))
-            end
-        end
+        nargs <= 4 || throw(ArgumentError("Too many positional arguments provided"))
 
         plot_linear_advection_csv(diagnostics_path;
                                   state_path = state_path,
-                                  output_path = output_path,
-                                  velocity = velocity)
-        println("Saved plot to $(output_path)")
+                                  heatmap_path = heatmap_path,
+                                  profiles_path = profiles_path)
+        println("Saved heatmap figure to $(heatmap_path)")
+        println("Saved profile figure to $(profiles_path)")
         return 0
     catch err
         showerror(stderr, err)

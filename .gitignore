@@ -32,3 +32,4 @@ run/
 # Ignore output files
 *.csv
 *.png
+*.pdf
