@@ -2,19 +2,23 @@
 using CodexPar
 
 """
-    run_linear_advection_demo(; nx=128, ny=1, velocity=(1.0, 0.0),
-                               cfl=0.4, steps=64, sample_every=nothing,
+    run_linear_advection_demo(; nx=128, ny=128, lengths=(2.0, 1.0),
+                               velocity=(1.0, 0.0), cfl=0.4, steps=100,
+                               sample_every=nothing,
                                diagnostics_path=nothing, state_path=nothing)
 
-Run a periodic linear advection problem on a structured mesh and report RMS
-statistics while advancing the solution with RK2. Optionally write diagnostics
-and the final state to disk as CSV tables.
+Run a periodic linear advection problem on a rectangular structured mesh and
+report RMS statistics while advancing the solution with RK2. The initial
+condition combines sine and cosine modes in both spatial directions. Optionally
+write diagnostics and the final state to disk; visualization lives in
+`plot_linear_advection.jl`.
 """
 function run_linear_advection_demo(; nx::Int = 128,
-                                    ny::Int = 1,
+                                    ny::Int = 128,
+                                    lengths::NTuple{2,<:Real} = (2.0, 1.0),
                                     velocity::Tuple{<:Real,<:Real} = (1.0, 0.0),
                                     cfl::Real = 0.4,
-                                    steps::Int = 64,
+                                    steps::Int = 100,
                                     sample_every::Union{Nothing,Int} = nothing,
                                     diagnostics_path::Union{Nothing,AbstractString} = nothing,
                                     state_path::Union{Nothing,AbstractString} = nothing)
@@ -22,11 +26,16 @@ function run_linear_advection_demo(; nx::Int = 128,
     nx >= 1 || throw(ArgumentError("nx must be positive"))
     ny >= 1 || throw(ArgumentError("ny must be positive"))
 
+    lengths_tuple = (float(lengths[1]), float(lengths[2]))
+
     sample_stride = isnothing(sample_every) ? max(1, steps ÷ 8) : sample_every
     sample_stride > 0 || throw(ArgumentError("sample_every must be positive when provided"))
 
-    problem = setup_linear_advection_problem(nx, ny; velocity = velocity)
-    state = LinearAdvectionState(problem; init = (x, _) -> sin(2pi * x))
+    problem = setup_linear_advection_problem(nx, ny;
+                                             velocity = velocity,
+                                             lengths = lengths_tuple)
+    init_field = _two_wave_initializer(lengths_tuple)
+    state = LinearAdvectionState(problem; init = init_field)
 
     rms_history = Float64[]
     records = Vector{NamedTuple{(:step, :time, :rms, :cfl), NTuple{4,Float64}}}()
@@ -71,6 +80,16 @@ function _write_diagnostics_csv(path::AbstractString,
         end
     end
     return path
+end
+
+function _two_wave_initializer(lengths::NTuple{2,Float64})
+    Lx, Ly = lengths
+    function init(x, y)
+        term1 = sin(2pi * x / Lx) * cos(pi * y / Ly)
+        term2 = 0.5 * cos(4pi * x / Lx) * sin(2pi * y / Ly)
+        return term1 + term2
+    end
+    return init
 end
 
 function _write_state_csv(path::AbstractString,

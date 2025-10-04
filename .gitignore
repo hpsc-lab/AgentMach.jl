@@ -28,3 +28,7 @@ coverage/
 
 # Local run and output directories
 run/
+
+# Ignore output files
+*.csv
+*.png
