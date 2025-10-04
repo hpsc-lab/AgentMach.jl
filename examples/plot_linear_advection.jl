@@ -1,11 +1,12 @@
 #!/usr/bin/env julia
+using Plots
+
 """
     plot_linear_advection_csv(diagnostics_path; state_path=nothing,
                                output_path="linear_advection.png")
 
 Load diagnostics (and optionally final-state) CSV files produced by
-`linear_advection_demo.jl` and generate a PNG summary. Requires Plots.jl to be
-installed in the active environment.
+`linear_advection_demo.jl` and generate a PNG summary.
 """
 function plot_linear_advection_csv(diagnostics_path::AbstractString;
                                    state_path::Union{Nothing,AbstractString} = nothing,
@@ -13,20 +14,10 @@ function plot_linear_advection_csv(diagnostics_path::AbstractString;
     diagnostics = _read_diagnostics_csv(diagnostics_path)
     state_records = state_path === nothing ? nothing : _read_state_csv(state_path)
 
-    plots_mod = _load_plots()
-    fig = _build_plot(plots_mod, diagnostics, state_records)
-    plots_mod.savefig(fig, output_path)
+    fig = _build_plot(diagnostics, state_records)
+    savefig(fig, output_path)
 
     return output_path
-end
-
-function _load_plots()
-    try
-        @eval using Plots
-    catch err
-        throw(ArgumentError("Plots.jl is required to generate figures. Run `import Pkg; Pkg.add(\"Plots\")` and retry."))
-    end
-    return Plots
 end
 
 function _read_csv(path::AbstractString)
@@ -92,28 +83,28 @@ function _read_state_csv(path::AbstractString)
             u = field)
 end
 
-function _build_plot(plots_mod, diagnostics, state_records)
-    fig = plots_mod.plot(diagnostics.time, diagnostics.rms;
-                         xlabel = "Time",
-                         ylabel = "RMS",
-                         label = "RMS",
-                         title = "Linear Advection Diagnostics")
+function _build_plot(diagnostics, state_records)
+    fig = plot(diagnostics.time, diagnostics.rms;
+               xlabel = "Time",
+               ylabel = "RMS",
+               label = "RMS",
+               title = "Linear Advection Diagnostics")
 
     if state_records !== nothing
         data = state_records
         ny = size(data.u, 2)
         if ny == 1
-            plots_mod.plot!(fig, vec(data.x), vec(data.u);
-                             label = "Final state",
-                             xlabel = "x",
-                             ylabel = "u")
+            plot!(fig, vec(data.x), vec(data.u);
+                  label = "Final state",
+                  xlabel = "x",
+                  ylabel = "u")
         else
-            heat = plots_mod.heatmap(vec(data.x[:, 1]), vec(data.y[1, :]), data.u;
-                                     xlabel = "x",
-                                     ylabel = "y",
-                                     title = "Final state",
-                                     colorbar = true)
-            fig = plots_mod.plot(fig, heat; layout = (1, 2))
+            heat = heatmap(vec(data.x[:, 1]), vec(data.y[1, :]), data.u;
+                           xlabel = "x",
+                           ylabel = "y",
+                           title = "Final state",
+                           colorbar = true)
+            fig = plot(fig, heat; layout = (1, 2))
         end
     end
 

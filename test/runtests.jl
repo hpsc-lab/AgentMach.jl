@@ -158,12 +158,8 @@ end
         @test length(state_lines) == length(exported.final_state) + 1
 
         plot_path = joinpath(dir, "plot.png")
-        try
-            out = plot_linear_advection_csv(diag_path; state_path = state_path, output_path = plot_path)
-            @test out == plot_path
-            @test isfile(plot_path)
-        catch err
-            @test err isa ArgumentError
-        end
+        out = plot_linear_advection_csv(diag_path; state_path = state_path, output_path = plot_path)
+        @test out == plot_path
+        @test isfile(plot_path)
     end
 end
