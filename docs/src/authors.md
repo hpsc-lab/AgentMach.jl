@@ -1,11 +1,16 @@
 # Authors
 
-CodexMach.jl is maintained by the Codex Team as part of the CodexMach Agent
-experiments on high-performance CFD in Julia.
+CodexMach.jl is maintained by Michael Schlottke-Lakemper as part of the
+CodexMach Agent experiments on high-performance CFD in Julia. You can reach the
+maintainer at <michael.schlottke-lakemper@uni-a.de>.
 
 ## Core Contributors
 
-- Codex Team — original design and implementation
+- Michael Schlottke-Lakemper — original design and implementation
+
+## Provenance
+
+CodexMach.jl was created end-to-end using gpt-5-codex.
 
 We welcome contributions that align with the project's development priorities:
 portable kernels, regression-tested physics, and scalable infrastructure. Please

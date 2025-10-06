@@ -90,3 +90,12 @@ routine returns the final state so you can post-process density, vorticity, or
 other derived fields. Supply `pdf_path` to snapshot the terminal density field,
 and `animation_path` (MP4 or GIF) plus `animation_every`/`animation_fps` to
 produce a time-resolved movie.
+
+## Maintainer
+
+CodexMach.jl is maintained by Michael Schlottke-Lakemper
+<michael.schlottke-lakemper@uni-a.de>.
+
+## Provenance
+
+This repository was created end-to-end using gpt-5-codex.

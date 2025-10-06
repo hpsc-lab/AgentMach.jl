@@ -46,3 +46,7 @@ Upcoming work centres on:
 
 If you would like to contribute or report an issue, please open a discussion on
 GitHub. The [Authors](authors.md) page lists the current maintainers.
+
+## Provenance
+
+This repository was created end-to-end using gpt-5-codex.

@@ -1,6 +1,6 @@
 name = "CodexMach"
 uuid = "dbf7be03-f09c-4874-9d54-616eaa9cc35e"
-authors = ["Codex Team"]
+authors = ["Michael Schlottke-Lakemper <michael.schlottke-lakemper@uni-a.de>"]
 version = "0.1.0"
 
 [deps]
