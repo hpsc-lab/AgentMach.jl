@@ -1,11 +1,13 @@
 #!/usr/bin/env julia
 using CodexPar
 using Printf
+using Plots
 
 """
     run_kelvin_helmholtz(; nx=256, ny=256, gamma=1.4, final_time=1.5,
                            cfl=0.45, T=Float32, log_every=25,
-                           diagnostics_path=nothing)
+                           diagnostics_path=nothing,
+                           pdf_path=nothing)
 
 Simulate the Kelvin-Helmholtz instability for the 2D compressible Euler system on
 [-1, 1]² with periodic boundaries. Returns integration metadata and (optionally)
@@ -18,7 +20,8 @@ function run_kelvin_helmholtz(; nx::Int = 256,
                                cfl::Real = 0.45,
                                T::Type = Float32,
                                log_every::Integer = 25,
-                               diagnostics_path::Union{Nothing,AbstractString} = nothing)
+                                 diagnostics_path::Union{Nothing,AbstractString} = nothing,
+                                 pdf_path::Union{Nothing,AbstractString} = nothing)
     nx >= 3 || throw(ArgumentError("nx must be at least 3"))
     ny >= 3 || throw(ArgumentError("ny must be at least 3"))
     final_time > 0 || throw(ArgumentError("final_time must be positive"))
@@ -66,12 +69,17 @@ function run_kelvin_helmholtz(; nx::Int = 256,
         _write_khi_diagnostics(diagnostics_path, records)
     end
 
+    if pdf_path !== nothing
+        _write_khi_pdf(pdf_path, problem, state, prim_buffers)
+    end
+
     return (; final_time = time,
             steps = step,
             cfl_last = last_cfl,
             state = state,
             problem = problem,
-            diagnostics = records)
+            diagnostics = records,
+            pdf_path = pdf_path)
 end
 
 function _kelvin_helmholtz_initializer(::Type{T}) where {T}
@@ -117,6 +125,31 @@ function _write_khi_diagnostics(path::AbstractString,
             @printf(io, "%d,%.8f,%.6f,%.8e\n", Int(r.step), r.time, r.cfl, r.kinetic_energy)
         end
     end
+    return path
+end
+
+function _write_khi_pdf(path::AbstractString,
+                        problem::CompressibleEulerProblem,
+                        state::CompressibleEulerState,
+                        buffers)
+    mesh_obj = mesh(problem)
+    centers_x, centers_y = cell_centers(mesh_obj)
+    prim = primitive_variables(problem, solution(state);
+                                rho_out = buffers.rho,
+                                u_out = buffers.u,
+                                v_out = buffers.v,
+                                p_out = buffers.p)
+
+    heatmap(centers_x,
+            centers_y,
+            prim.rho';
+            xlabel = "x",
+            ylabel = "y",
+            title = "Kelvin-Helmholtz density",
+            colorbar = true,
+            aspect_ratio = 1)
+
+    savefig(path)
     return path
 end
 
