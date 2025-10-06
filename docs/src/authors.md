@@ -1,6 +1,6 @@
 # Authors
 
-CodexPar.jl is maintained by the Codex Team as part of the CodexPar Agent
+CodexMach.jl is maintained by the Codex Team as part of the CodexMach Agent
 experiments on high-performance CFD in Julia.
 
 ## Core Contributors

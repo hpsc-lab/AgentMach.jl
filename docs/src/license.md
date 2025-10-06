@@ -1,6 +1,6 @@
 # License
 
-CodexPar.jl is distributed under the MIT License. A copy of the license is
+CodexMach.jl is distributed under the MIT License. A copy of the license is
 included below for convenience; the authoritative text lives at `../LICENSE` in
 the repository root.
 

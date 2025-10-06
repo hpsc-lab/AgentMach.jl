@@ -1,9 +1,9 @@
 using Test
-using CodexPar
+using CodexMach
 
-@testset "CodexPar.jl" begin
-    @test greet() == "Hello, world! Welcome to CodexPar."
-    @test greet("team") == "Hello, team! Welcome to CodexPar."
+@testset "CodexMach.jl" begin
+    @test greet() == "Hello, world! Welcome to CodexMach."
+    @test greet("team") == "Hello, team! Welcome to CodexMach."
 end
 
 @testset "StructuredMesh" begin
@@ -12,7 +12,7 @@ end
     @test spacing(mesh) == (0.5, 0.5)
     @test origin(mesh) == (-1.0, 0.5)
 
-    centers_x, centers_y = CodexPar.cell_centers(mesh)
+    centers_x, centers_y = CodexMach.cell_centers(mesh)
     @test isapprox(first(centers_x), -0.75; atol = 1e-12)
     @test isapprox(last(centers_x), 0.75; atol = 1e-12)
     @test isapprox(first(centers_y), 0.75; atol = 1e-12)
@@ -21,11 +21,11 @@ end
 
 @testset "BoundaryConditions" begin
     bc = PeriodicBoundaryConditions(; x = true, y = false)
-    @test CodexPar.is_periodic(bc, 1)
-    @test !CodexPar.is_periodic(bc, 2)
+    @test CodexMach.is_periodic(bc, 1)
+    @test !CodexMach.is_periodic(bc, 2)
 
-    @test_throws ArgumentError CodexPar.is_periodic(bc, 0)
-    @test_throws ArgumentError CodexPar.is_periodic(bc, 3)
+    @test_throws ArgumentError CodexMach.is_periodic(bc, 0)
+    @test_throws ArgumentError CodexMach.is_periodic(bc, 3)
 end
 
 @testset "LinearAdvection setup" begin
@@ -35,13 +35,13 @@ end
                                              velocity = (0.5, -0.25))
 
     @test problem isa LinearAdvectionProblem
-    mesh = CodexPar.mesh(problem)
-    bc = CodexPar.boundary_conditions(problem)
-    eq = CodexPar.pde(problem)
+    mesh = CodexMach.mesh(problem)
+    bc = CodexMach.boundary_conditions(problem)
+    eq = CodexMach.pde(problem)
 
     @test spacing(mesh) == (0.25, 0.25)
-    @test CodexPar.periodic_axes(bc) == (true, true)
-    @test CodexPar.velocity(eq) == (0.5, -0.25)
+    @test CodexMach.periodic_axes(bc) == (true, true)
+    @test CodexMach.velocity(eq) == (0.5, -0.25)
 end
 
 @testset "LinearAdvection state" begin
@@ -56,11 +56,11 @@ end
     @test size(ws.k2) == size(u)
     @test size(ws.stage) == size(u)
 
-    mesh = CodexPar.mesh(problem)
+    mesh = CodexMach.mesh(problem)
     init_fun(x, y) = x + y
     state_fun = LinearAdvectionState(problem; init = init_fun)
     u_fun = solution(state_fun)
-    centers_x, centers_y = CodexPar.cell_centers(mesh)
+    centers_x, centers_y = CodexMach.cell_centers(mesh)
     @inbounds for j in 1:size(u_fun, 2), i in 1:size(u_fun, 1)
         @test isapprox(u_fun[i, j], init_fun(centers_x[i], centers_y[j]); atol = 1e-12)
     end
@@ -73,8 +73,8 @@ end
 @testset "LinearAdvection RK2" begin
     nx = 64
     problem = setup_linear_advection_problem(nx, 1; velocity = (1.0, 0.0))
-    mesh = CodexPar.mesh(problem)
-    centers_x, _ = CodexPar.cell_centers(mesh)
+    mesh = CodexMach.mesh(problem)
+    centers_x, _ = CodexMach.cell_centers(mesh)
     init_fun(x, _) = sin(2pi * x)
     state = LinearAdvectionState(problem; init = init_fun)
     dx, _ = spacing(mesh)
@@ -106,8 +106,8 @@ end
 @testset "LinearAdvection driver" begin
     nx = 64
     problem = setup_linear_advection_problem(nx, 1; velocity = (1.0, 0.0))
-    mesh = CodexPar.mesh(problem)
-    centers_x, _ = CodexPar.cell_centers(mesh)
+    mesh = CodexMach.mesh(problem)
+    centers_x, _ = CodexMach.cell_centers(mesh)
     init_fun(x, _) = sin(2pi * x)
     dx, _ = spacing(mesh)
     dt = 0.25 * dx

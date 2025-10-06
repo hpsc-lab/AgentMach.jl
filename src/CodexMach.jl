@@ -1,8 +1,8 @@
-module CodexPar
+module CodexMach
 
 using TimerOutputs
 
-const _SIMULATION_TIMERS = TimerOutput("CodexPar Simulation")
+const _SIMULATION_TIMERS = TimerOutput("CodexMach Simulation")
 
 simulation_timers() = _SIMULATION_TIMERS
 
@@ -49,7 +49,7 @@ export greet,
 Return a friendly greeting so downstream users can smoke-test that the package is correctly installed.
 """
 function greet(name::AbstractString = "world")
-    return "Hello, $(name)! Welcome to CodexPar."
+    return "Hello, $(name)! Welcome to CodexMach."
 end
 
 end # module

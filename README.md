@@ -1,15 +1,15 @@
-# CodexPar.jl
+# CodexMach.jl
 
-CodexPar.jl is a fresh Julia package scaffold created as a starting point for parallel-computing experiments. The package currently exposes a tiny `greet` utility so that you can validate your development environment end-to-end.
+CodexMach.jl is a fresh Julia package scaffold created as a starting point for parallel-computing experiments. The package currently exposes a tiny `greet` utility so that you can validate your development environment end-to-end.
 
 ## Getting started
 
 ```julia
 pkg> activate .
 pkg> instantiate
-julia> using CodexPar
+julia> using CodexMach
 julia> greet()
-"Hello, world! Welcome to CodexPar."
+"Hello, world! Welcome to CodexMach."
 ```
 
 ## Testing

@@ -1,14 +1,14 @@
 using Documenter
-using CodexPar
+using CodexMach
 
-DocMeta.setdocmeta!(CodexPar, :DocTestSetup, :(using CodexPar); recursive=true)
+DocMeta.setdocmeta!(CodexMach, :DocTestSetup, :(using CodexMach); recursive=true)
 
 makedocs(
-    modules = [CodexPar],
+    modules = [CodexMach],
     format = Documenter.HTML(
         prettyurls = get(ENV, "CI", "false") == "true",
     ),
-    sitename = "CodexPar.jl",
+    sitename = "CodexMach.jl",
     doctest = true,
     pages = [
         "Home" => "index.md",

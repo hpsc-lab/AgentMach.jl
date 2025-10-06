@@ -1,6 +1,6 @@
-# CodexPar.jl
+# CodexMach.jl
 
-CodexPar.jl is a playground for building high-performance computational fluid
+CodexMach.jl is a playground for building high-performance computational fluid
 dynamics (CFD) solvers in Julia. The package assembles structured meshes,
 configurable physics kernels, and explicit time integration building blocks into
 a composable toolkit that targets both CPU and GPU execution and scales to
@@ -21,7 +21,7 @@ distributed-memory systems.
 
 ## Architecture Overview
 
-CodexPar keeps mesh generation, physics descriptions, flux evaluations, and time
+CodexMach keeps mesh generation, physics descriptions, flux evaluations, and time
 integration decoupled so the components can be recombined when experimenting
 with new physics or backends. The top-level module simply re-exports the most
 useful types and functions; you can construct meshes and PDE problems directly

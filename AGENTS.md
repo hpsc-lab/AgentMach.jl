@@ -1,7 +1,7 @@
-# CodexPar Agent Brief
+# CodexMach Agent Brief
 
 ## Mission
-CodexPar.jl is a Julia package for experimenting with high-performance CFD. Every change should move us toward a production-quality solver that can run on both CPUs and GPUs and scale across distributed memory systems.
+CodexMach.jl is a Julia package for experimenting with high-performance CFD. Every change should move us toward a production-quality solver that can run on both CPUs and GPUs and scale across distributed memory systems.
 
 ## Core Requirements
 - 2D structured meshes with 2nd-order finite volume discretizations.

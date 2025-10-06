@@ -1,7 +1,7 @@
 # API Reference
 
 ```@meta
-CurrentModule = CodexPar
+CurrentModule = CodexMach
 ```
 
 ## Utilities

@@ -1,7 +1,7 @@
 # Examples
 
 ```@meta
-CurrentModule = CodexPar
+CurrentModule = CodexMach
 ```
 
 The `examples/` directory contains reproducible scripts that exercise the core
