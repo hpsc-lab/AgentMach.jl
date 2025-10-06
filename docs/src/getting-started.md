@@ -9,7 +9,7 @@ that the package is working as intended.
 
 ## Installation
 
-1. Install [Julia 1.9](https://julialang.org/downloads/) or newer.
+1. Install [Julia 1.11](https://julialang.org/downloads/) or newer.
 2. Clone the repository and instantiate the package environment:
 
    ```julia
