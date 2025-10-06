@@ -51,6 +51,8 @@ jobs:
           path: build
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: enabled
       - name: Upload artifact for deployment
         uses: actions/upload-pages-artifact@v3
         with:
