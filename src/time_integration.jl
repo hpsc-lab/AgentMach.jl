@@ -216,11 +216,18 @@ function _rk2_step!(state, problem, dt::Real)
     Tsol = eltype(u)
     dtT = convert(Tsol, dt)
     half = convert(Tsol, 0.5)
+    timer = simulation_timers()
 
-    compute_rhs!(ws.k1, u, problem)
-    @. ws.stage = u + dtT * ws.k1
-    compute_rhs!(ws.k2, ws.stage, problem)
-    @. u = u + (dtT * half) * (ws.k1 + ws.k2)
+    @timeit timer "RK2 step" begin
+        @timeit timer "RHS compute" compute_rhs!(ws.k1, u, problem)
+        @timeit timer "Stage predictor" begin
+            @. ws.stage = u + dtT * ws.k1
+        end
+        @timeit timer "RHS compute" compute_rhs!(ws.k2, ws.stage, problem)
+        @timeit timer "Solution update" begin
+            @. u = u + (dtT * half) * (ws.k1 + ws.k2)
+        end
+    end
 
     return state
 end

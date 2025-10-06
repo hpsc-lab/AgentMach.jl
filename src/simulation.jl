@@ -19,35 +19,48 @@ function run_linear_advection!(state::LinearAdvectionState,
     steps > 0 || throw(ArgumentError("steps must be positive"))
     log_every >= 0 || throw(ArgumentError("log_every must be non-negative"))
 
-    effective_dt = dt === nothing ? stable_timestep(problem; cfl = cfl_target) : float(dt)
+    timer = simulation_timers()
+    reset_timer!(timer)
+
+    effective_dt = if dt === nothing
+        @timeit timer "Stable timestep" stable_timestep(problem; cfl = cfl_target)
+    else
+        float(dt)
+    end
     isfinite(effective_dt) ||
         throw(ArgumentError("Time step is infinite; provide a finite dt explicitly"))
     effective_dt > 0 || throw(ArgumentError("time step must be positive"))
 
-    cfl = cfl_number(problem, effective_dt)
+    cfl = @timeit timer "CFL number" cfl_number(problem, effective_dt)
     history = record_cfl ? Float64[] : nothing
 
-    for step in 1:steps
-        rk2_step!(state, problem, effective_dt)
+    @timeit timer "Time integration" begin
+        for step in 1:steps
+            rk2_step!(state, problem, effective_dt)
 
-        if callback !== nothing
-            callback(step, state, problem, effective_dt)
-        end
+            if callback !== nothing
+                callback(step, state, problem, effective_dt)
+            end
 
-        if record_cfl
-            push!(history, float(cfl))
-        end
+            if record_cfl
+                push!(history, float(cfl))
+            end
 
-        if log_every > 0 && step % log_every == 0
-            @info "Linear advection step" step=step step_time=step * effective_dt cfl=cfl
+            if log_every > 0 && step % log_every == 0
+                @info "Linear advection step" step=step step_time=step * effective_dt cfl=cfl
+            end
         end
     end
 
-    return (; dt = effective_dt,
-            steps = steps,
-            final_time = steps * effective_dt,
-            cfl = cfl,
-            cfl_history = history)
+    result = (; dt = effective_dt,
+               steps = steps,
+               final_time = steps * effective_dt,
+               cfl = cfl,
+               cfl_history = history)
+
+    print_timer(stdout, timer; allocations = true, sortby = :time)
+
+    return result
 end
 
 """
@@ -71,7 +84,14 @@ function run_compressible_euler!(state::CompressibleEulerState,
     steps > 0 || throw(ArgumentError("steps must be positive"))
     log_every >= 0 || throw(ArgumentError("log_every must be non-negative"))
 
-    base_dt = dt === nothing ? stable_timestep(problem, state; cfl = cfl_target) : float(dt)
+    timer = simulation_timers()
+    reset_timer!(timer)
+
+    base_dt = if dt === nothing
+        @timeit timer "Stable timestep" stable_timestep(problem, state; cfl = cfl_target)
+    else
+        float(dt)
+    end
     isfinite(base_dt) ||
         throw(ArgumentError("Time step is infinite; provide a finite dt explicitly"))
     base_dt > 0 || throw(ArgumentError("time step must be positive"))
@@ -80,35 +100,45 @@ function run_compressible_euler!(state::CompressibleEulerState,
     total_time = 0.0
     last_cfl = NaN
 
-    for step in 1:steps
-        current_dt = if dt === nothing
-            adapt_dt ? stable_timestep(problem, state; cfl = cfl_target) : base_dt
-        else
-            base_dt
-        end
-        current_dt > 0 || throw(ArgumentError("Encountered non-positive time step during integration"))
+    @timeit timer "Time integration" begin
+        for step in 1:steps
+            current_dt = if dt === nothing
+                if adapt_dt
+                    @timeit timer "Stable timestep" stable_timestep(problem, state; cfl = cfl_target)
+                else
+                    base_dt
+                end
+            else
+                base_dt
+            end
+            current_dt > 0 || throw(ArgumentError("Encountered non-positive time step during integration"))
 
-        rk2_step!(state, problem, current_dt)
-        total_time += current_dt
+            rk2_step!(state, problem, current_dt)
+            total_time += current_dt
 
-        last_cfl = cfl_number(problem, state, current_dt)
+            last_cfl = @timeit timer "CFL number" cfl_number(problem, state, current_dt)
 
-        if callback !== nothing
-            callback(step, state, problem, current_dt)
-        end
+            if callback !== nothing
+                callback(step, state, problem, current_dt)
+            end
 
-        if record_cfl
-            push!(history, float(last_cfl))
-        end
+            if record_cfl
+                push!(history, float(last_cfl))
+            end
 
-        if log_every > 0 && step % log_every == 0
-            @info "Compressible Euler step" step=step step_time=total_time cfl=last_cfl dt=current_dt
+            if log_every > 0 && step % log_every == 0
+                @info "Compressible Euler step" step=step step_time=total_time cfl=last_cfl dt=current_dt
+            end
         end
     end
 
-    return (; dt = (dt === nothing && adapt_dt) ? nothing : base_dt,
-            steps = steps,
-            final_time = total_time,
-            cfl = last_cfl,
-            cfl_history = history)
+    result = (; dt = (dt === nothing && adapt_dt) ? nothing : base_dt,
+               steps = steps,
+               final_time = total_time,
+               cfl = last_cfl,
+               cfl_history = history)
+
+    print_timer(stdout, timer; allocations = true, sortby = :time)
+
+    return result
 end

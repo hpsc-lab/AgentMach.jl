@@ -1,5 +1,11 @@
 module CodexPar
 
+using TimerOutputs
+
+const _SIMULATION_TIMERS = TimerOutput("CodexPar Simulation")
+
+simulation_timers() = _SIMULATION_TIMERS
+
 include("mesh.jl")
 include("boundary_conditions.jl")
 include("equations.jl")
