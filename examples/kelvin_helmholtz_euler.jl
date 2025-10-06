@@ -36,6 +36,7 @@ function run_kelvin_helmholtz(; nx::Int = 256,
     step = 0
     last_cfl = NaN
     records = diagnostics_path === nothing ? nothing : Vector{NamedTuple{(:step, :time, :cfl, :kinetic_energy),NTuple{4,Float64}}}()
+    prim_buffers = primitive_variables(problem, solution(state))
 
     while time < final_time
         dt = stable_timestep(problem, state; cfl = cfl)
@@ -49,7 +50,7 @@ function run_kelvin_helmholtz(; nx::Int = 256,
         step += 1
 
         cfl_val = cfl_number(problem, state, dt)
-        kinetic = _volume_average_kinetic_energy(state, problem)
+        kinetic = _volume_average_kinetic_energy(state, problem, prim_buffers)
         last_cfl = cfl_val
 
         if diagnostics_path !== nothing
@@ -90,18 +91,20 @@ function _kelvin_helmholtz_initializer(::Type{T}) where {T}
 end
 
 function _volume_average_kinetic_energy(state::CompressibleEulerState,
-                                        problem::CompressibleEulerProblem)
-    u = solution(state)
-    nx, ny = size(mesh(problem))
-    total = zero(eltype(u))
+                                        problem::CompressibleEulerProblem,
+                                        buffers)
+    prim = primitive_variables(problem, solution(state);
+                                rho_out = buffers.rho,
+                                u_out = buffers.u,
+                                v_out = buffers.v,
+                                p_out = buffers.p)
+
+    nx, ny = size(prim.rho)
+    total = zero(eltype(prim.rho))
+    half = convert(eltype(prim.rho), 0.5)
     @inbounds for j in 1:ny, i in 1:nx
-        rho = u[1, i, j]
-        rhou = u[2, i, j]
-        rhov = u[3, i, j]
-        invrho = one(rho) / rho
-        ux = rhou * invrho
-        uy = rhov * invrho
-        total += 0.5 * rho * (ux^2 + uy^2)
+        vel2 = prim.u[i, j]^2 + prim.v[i, j]^2
+        total += half * prim.rho[i, j] * vel2
     end
     return float(total) / (nx * ny)
 end
