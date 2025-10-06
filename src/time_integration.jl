@@ -21,7 +21,18 @@ struct LinearAdvectionState{A,W}
     workspace::W
 end
 
+"""
+    solution(state)
+
+Return the primary solution array stored in `state`.
+"""
 solution(state::LinearAdvectionState) = state.solution
+
+"""
+    workspace(state)
+
+Access the Runge-Kutta scratch buffers bundled with `state`.
+"""
 workspace(state::LinearAdvectionState) = state.workspace
 
 """
@@ -35,7 +46,18 @@ struct CompressibleEulerState{A,W}
     workspace::W
 end
 
+"""
+    solution(state)
+
+Return the conserved-variable tensor stored in `state`.
+"""
 solution(state::CompressibleEulerState) = state.solution
+
+"""
+    workspace(state)
+
+Access the Runge-Kutta scratch buffers bundled with `state`.
+"""
 workspace(state::CompressibleEulerState) = state.workspace
 
 const _DefaultArrayType = Array
@@ -206,8 +228,9 @@ end
 """
     compute_rhs!(du, u, problem)
 
-Populate `du` with the spatial derivative of `u` for a linear advection problem,
-using a second-order upwind stencil that honors periodic boundary conditions.
+Populate `du` with the spatial derivative of `u` for the PDE described by
+`problem`. Linear advection problems use a second-order upwind stencil, while
+compressible Euler problems employ slope-limited Rusanov fluxes.
 """
 function compute_rhs!(du::AbstractArray{T,2},
                       u::AbstractArray{T,2},
@@ -462,6 +485,12 @@ function stable_timestep(problem::LinearAdvectionProblem; cfl::Real = 0.9)
     return float(cfl) / denom
 end
 
+"""
+    cfl_number(problem, state, dt)
+
+Compute the CFL number implied by timestep `dt` for the compressible Euler
+problem `problem` evaluated on the state `state`.
+"""
 function cfl_number(problem::CompressibleEulerProblem,
                     state::CompressibleEulerState,
                     dt::Real)
@@ -493,6 +522,12 @@ function cfl_number(problem::CompressibleEulerProblem,
     return dtT * (max_ax / dx + max_ay / dy)
 end
 
+"""
+    stable_timestep(problem, state; cfl=0.45)
+
+Return a CFL-limited timestep estimate for the compressible Euler problem using
+the current `state` and requested `cfl` target.
+"""
 function stable_timestep(problem::CompressibleEulerProblem,
                          state::CompressibleEulerState;
                          cfl::Real = 0.45)

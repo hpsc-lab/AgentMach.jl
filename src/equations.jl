@@ -23,6 +23,11 @@ function LinearAdvection(velocity::AbstractVector{<:Real})
     return LinearAdvection((velocity[1], velocity[2]))
 end
 
+"""
+    velocity(eq)
+
+Return the constant advection velocity associated with `eq`.
+"""
 velocity(eq::LinearAdvection) = eq.velocity
 
 """
@@ -42,8 +47,25 @@ struct LinearAdvectionProblem{M,B,T}
     end
 end
 
+"""
+    mesh(problem)
+
+Return the mesh associated with the PDE problem `problem`.
+"""
 mesh(problem::LinearAdvectionProblem) = problem.mesh
+
+"""
+    boundary_conditions(problem)
+
+Return the boundary-condition specification attached to `problem`.
+"""
 boundary_conditions(problem::LinearAdvectionProblem) = problem.boundary_conditions
+
+"""
+    pde(problem)
+
+Return the equation-of-motion descriptor stored within `problem`.
+"""
 pde(problem::LinearAdvectionProblem) = problem.equation
 
 """
@@ -98,8 +120,25 @@ struct CompressibleEulerProblem{M,B,T}
     end
 end
 
+"""
+    mesh(problem)
+
+Return the mesh associated with the PDE problem `problem`.
+"""
 mesh(problem::CompressibleEulerProblem) = problem.mesh
+
+"""
+    boundary_conditions(problem)
+
+Return the boundary-condition specification attached to `problem`.
+"""
 boundary_conditions(problem::CompressibleEulerProblem) = problem.boundary_conditions
+
+"""
+    pde(problem)
+
+Return the equation-of-motion descriptor stored within `problem`.
+"""
 pde(problem::CompressibleEulerProblem) = problem.equation
 
 """

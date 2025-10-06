@@ -28,4 +28,10 @@ function is_periodic(bc::PeriodicBoundaryConditions, axis::Integer)
     return bc.axes[axis]
 end
 
+"""
+    periodic_axes(bc)
+
+Return the tuple `(periodic_x, periodic_y)` indicating which axes are periodic
+for the supplied boundary condition object.
+"""
 periodic_axes(bc::PeriodicBoundaryConditions) = bc.axes
