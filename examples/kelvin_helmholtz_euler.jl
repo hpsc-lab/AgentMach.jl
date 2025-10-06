@@ -147,7 +147,8 @@ function _write_khi_pdf(path::AbstractString,
             ylabel = "y",
             title = "Kelvin-Helmholtz density",
             colorbar = true,
-            aspect_ratio = 1)
+            aspect_ratio = 1,
+            color = cgrad(:coolwarm))
 
     savefig(path)
     return path
