@@ -134,7 +134,8 @@ end
     include(joinpath(@__DIR__, "..", "examples", "linear_advection_demo.jl"))
     include(joinpath(@__DIR__, "..", "examples", "plot_linear_advection.jl"))
 
-    result = run_linear_advection_demo(; nx = 16, ny = 1, steps = 2, cfl = 0.3, sample_every = 1)
+    result = run_linear_advection_demo(; nx = 16, ny = 1, steps = 2, cfl = 0.3, sample_every = 1,
+                                        match_return_period = false)
     @test result.steps == 2
     @test result.dt > 0
     @test result.final_time ≈ 2 * result.dt
@@ -147,7 +148,8 @@ end
         exported = run_linear_advection_demo(; nx = 8, ny = 1, steps = 3, cfl = 0.25,
                                              sample_every = 1,
                                              diagnostics_path = diag_path,
-                                             state_path = state_path)
+                                             state_path = state_path,
+                                             match_return_period = false)
         @test isfile(diag_path)
         @test isfile(state_path)
         diag_lines = readlines(diag_path)

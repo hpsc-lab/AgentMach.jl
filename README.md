@@ -72,3 +72,19 @@ error at each resolution, estimates the per-level experimental order of
 convergence (EOC), and finishes with the average EOC. Edit
 `run_convergence_study` inside the script to adjust the final time, CFL target,
 or refinement levels.
+
+## Kelvin-Helmholtz instability
+
+The compressible Euler path is exercised by
+`examples/kelvin_helmholtz_euler.jl`, which seeds a periodic Kelvin-Helmholtz
+roll-up on a square box:
+
+```bash
+julia --project=. examples/kelvin_helmholtz_euler.jl
+```
+
+By default the driver uses a 256×256 mesh, RK2 time stepping with adaptive CFL
+control, and prints periodic log messages. Pass a file path via
+`diagnostics_path` to capture per-step CFL and kinetic-energy measurements. The
+routine returns the final state so you can post-process density, vorticity, or
+other derived fields.

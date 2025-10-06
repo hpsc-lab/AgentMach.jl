@@ -5,7 +5,8 @@ using CodexPar
     run_linear_advection_demo(; nx=256, ny=128, lengths=(2.0, 1.0),
                                velocity=(1.0, 0.0), cfl=0.4, steps=100,
                                sample_every=nothing,
-                               diagnostics_path=nothing, state_path=nothing)
+                               diagnostics_path=nothing, state_path=nothing,
+                               match_return_period=true)
 
 Run a periodic linear advection problem on a rectangular structured mesh whose
 cells are square (`Δx = Δy`) by allocating more cells along the longer x
@@ -23,7 +24,8 @@ function run_linear_advection_demo(; nx::Int = 256,
                                     steps::Int = 100,
                                     sample_every::Union{Nothing,Int} = nothing,
                                     diagnostics_path::Union{Nothing,AbstractString} = nothing,
-                                    state_path::Union{Nothing,AbstractString} = nothing)
+                                    state_path::Union{Nothing,AbstractString} = nothing,
+                                    match_return_period::Bool = true)
     steps > 0 || throw(ArgumentError("steps must be positive"))
     nx >= 1 || throw(ArgumentError("nx must be positive"))
     ny >= 1 || throw(ArgumentError("ny must be positive"))
@@ -40,8 +42,14 @@ function run_linear_advection_demo(; nx::Int = 256,
 
     dt_cfl = stable_timestep(problem; cfl = cfl)
     target_time = _return_period(lengths_tuple, velocity)
-    total_steps = _select_step_count(steps, dt_cfl, target_time)
-    effective_dt = target_time > 0 ? target_time / total_steps : dt_cfl
+
+    if match_return_period && target_time > 0
+        total_steps = _select_step_count(steps, dt_cfl, target_time)
+        effective_dt = target_time / total_steps
+    else
+        total_steps = steps
+        effective_dt = dt_cfl
+    end
 
     sample_stride = isnothing(sample_every) ? max(1, total_steps ÷ 8) : sample_every
     sample_stride > 0 || throw(ArgumentError("sample_every must be positive when provided"))

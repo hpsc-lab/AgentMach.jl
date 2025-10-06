@@ -29,7 +29,12 @@ export greet,
        rk2_step!,
        cfl_number,
        stable_timestep,
-       run_linear_advection!
+       run_linear_advection!,
+       CompressibleEuler,
+       CompressibleEulerProblem,
+       setup_compressible_euler_problem,
+       CompressibleEulerState,
+       run_compressible_euler!
 
 """
     greet(name::AbstractString = "world")

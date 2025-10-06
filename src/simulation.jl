@@ -49,3 +49,66 @@ function run_linear_advection!(state::LinearAdvectionState,
             cfl = cfl,
             cfl_history = history)
 end
+
+"""
+    run_compressible_euler!(state, problem; steps, dt=nothing, cfl_target=0.45,
+                             log_every=0, callback=nothing, record_cfl=false,
+                             adapt_dt=true)
+
+Advance a `CompressibleEulerState` for a fixed number of RK2 steps. If `dt` is
+omitted, a stable timestep is recomputed from the current state each iteration
+using the requested `cfl_target`.
+"""
+function run_compressible_euler!(state::CompressibleEulerState,
+                                 problem::CompressibleEulerProblem;
+                                 steps::Integer,
+                                 dt::Union{Nothing,Real} = nothing,
+                                 cfl_target::Real = 0.45,
+                                 log_every::Integer = 0,
+                                 callback = nothing,
+                                 record_cfl::Bool = false,
+                                 adapt_dt::Bool = true)
+    steps > 0 || throw(ArgumentError("steps must be positive"))
+    log_every >= 0 || throw(ArgumentError("log_every must be non-negative"))
+
+    base_dt = dt === nothing ? stable_timestep(problem, state; cfl = cfl_target) : float(dt)
+    isfinite(base_dt) ||
+        throw(ArgumentError("Time step is infinite; provide a finite dt explicitly"))
+    base_dt > 0 || throw(ArgumentError("time step must be positive"))
+
+    history = record_cfl ? Float64[] : nothing
+    total_time = 0.0
+    last_cfl = NaN
+
+    for step in 1:steps
+        current_dt = if dt === nothing
+            adapt_dt ? stable_timestep(problem, state; cfl = cfl_target) : base_dt
+        else
+            base_dt
+        end
+        current_dt > 0 || throw(ArgumentError("Encountered non-positive time step during integration"))
+
+        rk2_step!(state, problem, current_dt)
+        total_time += current_dt
+
+        last_cfl = cfl_number(problem, state, current_dt)
+
+        if callback !== nothing
+            callback(step, state, problem, current_dt)
+        end
+
+        if record_cfl
+            push!(history, float(last_cfl))
+        end
+
+        if log_every > 0 && step % log_every == 0
+            @info "Compressible Euler step" step=step step_time=total_time cfl=last_cfl dt=current_dt
+        end
+    end
+
+    return (; dt = (dt === nothing && adapt_dt) ? nothing : base_dt,
+            steps = steps,
+            final_time = total_time,
+            cfl = last_cfl,
+            cfl_history = history)
+end

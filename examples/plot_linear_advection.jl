@@ -4,7 +4,8 @@ using Plots
 """
     plot_linear_advection_csv(diagnostics_path; state_path,
                                heatmap_path="linear_advection_fields.pdf",
-                               profiles_path="linear_advection_profiles.pdf")
+                               profiles_path="linear_advection_profiles.pdf",
+                               output_path=nothing)
 
 Load diagnostics and state CSV files produced by `linear_advection_demo.jl` and
 emit two PDF figures: one with side-by-side heatmaps of the analytical initial
@@ -14,7 +15,8 @@ profiles along the domain diagonal and along the mid-plane in `y`.
 function plot_linear_advection_csv(diagnostics_path::AbstractString;
                                    state_path::Union{Nothing,AbstractString} = nothing,
                                    heatmap_path::AbstractString = "linear_advection_fields.pdf",
-                                   profiles_path::AbstractString = "linear_advection_profiles.pdf")
+                                   profiles_path::AbstractString = "linear_advection_profiles.pdf",
+                                   output_path::Union{Nothing,AbstractString} = nothing)
     diagnostics = _read_diagnostics_csv(diagnostics_path)
     state_path === nothing &&
         throw(ArgumentError("State CSV is required to build heatmap and profile plots"))
@@ -23,9 +25,14 @@ function plot_linear_advection_csv(diagnostics_path::AbstractString;
     init_field = _build_initial_field(state_records)
 
     heatmap_fig = _build_heatmap_figure(state_records, init_field)
-    savefig(heatmap_fig, heatmap_path)
-
     profiles_fig = _build_profiles_figure(state_records, init_field)
+
+    if output_path !== nothing
+        savefig(heatmap_fig, output_path)
+        return output_path
+    end
+
+    savefig(heatmap_fig, heatmap_path)
     savefig(profiles_fig, profiles_path)
 
     return (; diagnostics = diagnostics,
