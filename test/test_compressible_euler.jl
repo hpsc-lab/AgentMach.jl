@@ -36,4 +36,33 @@ using CodexPar
     tol_energy = 1e-9 * length(u)
     @test abs(total_mass - mass_before) <= tol_mass
     @test abs(total_energy - energy_before) <= tol_energy
+
+    prim = primitive_variables(prob, state)
+    @test size(prim.rho) == (nx, ny)
+    @test size(prim.u) == (nx, ny)
+    @test size(prim.v) == (nx, ny)
+    @test size(prim.p) == (nx, ny)
+
+    sample_i, sample_j = 5, 6
+    @test isapprox(prim.rho[sample_i, sample_j], u[1, sample_i, sample_j]; atol = 1e-12)
+    @test isapprox(prim.u[sample_i, sample_j], u[2, sample_i, sample_j] / u[1, sample_i, sample_j]; atol = 1e-10)
+    @test isapprox(prim.v[sample_i, sample_j], u[3, sample_i, sample_j] / u[1, sample_i, sample_j]; atol = 1e-10)
+
+    rho_buf = similar(prim.rho)
+    u_buf = similar(prim.u)
+    v_buf = similar(prim.v)
+    p_buf = similar(prim.p)
+    prim_buf = primitive_variables(prob, solution(state);
+                                   rho_out = rho_buf,
+                                   u_out = u_buf,
+                                   v_out = v_buf,
+                                   p_out = p_buf)
+    @test prim_buf.rho === rho_buf
+    @test prim_buf.u === u_buf
+    @test prim_buf.v === v_buf
+    @test prim_buf.p === p_buf
+    @test all(isapprox.(prim_buf.rho, prim.rho; atol = 1e-12))
+    @test all(isapprox.(prim_buf.u, prim.u; atol = 1e-12))
+    @test all(isapprox.(prim_buf.v, prim.v; atol = 1e-12))
+    @test all(isapprox.(prim_buf.p, prim.p; atol = 1e-12))
 end

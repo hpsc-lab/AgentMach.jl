@@ -34,7 +34,8 @@ export greet,
        CompressibleEulerProblem,
        setup_compressible_euler_problem,
        CompressibleEulerState,
-       run_compressible_euler!
+       run_compressible_euler!,
+       primitive_variables
 
 """
     greet(name::AbstractString = "world")

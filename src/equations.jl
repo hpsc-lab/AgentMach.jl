@@ -119,3 +119,84 @@ function setup_compressible_euler_problem(nx::Integer,
     eq = CompressibleEuler(; gamma = gamma)
     return CompressibleEulerProblem(mesh, boundary_conditions, eq)
 end
+
+"""
+    primitive_variables(eq, ρ, ρu, ρv, E)
+
+Convert conserved quantities into primitive variables `(ρ, u, v, p)` for a
+compressible Euler equation set.
+"""
+@inline function primitive_variables(eq::CompressibleEuler,
+                                     ρ::Real,
+                                     ρu::Real,
+                                     ρv::Real,
+                                     E::Real)
+    ρT = float(ρ)
+    ρT > 0 || throw(ArgumentError("Density must remain positive"))
+
+    ρuT = float(ρu)
+    ρvT = float(ρv)
+    ET = float(E)
+    γT = float(gamma(eq))
+
+    invρ = one(ρT) / ρT
+    u = ρuT * invρ
+    v = ρvT * invρ
+    half = convert(typeof(ρT), 0.5)
+    kinetic = half * ρT * (u^2 + v^2)
+
+    internal = ET - kinetic
+    epsT = eps(typeof(ρT))
+    internal = max(internal, epsT)
+    p = (γT - convert(typeof(γT), 1)) * internal
+    p = max(p, epsT)
+
+    return (ρ = ρT, u = u, v = v, p = p)
+end
+
+"""
+    primitive_variables(eq, conserved; rho_out=nothing, u_out=nothing,
+                        v_out=nothing, p_out=nothing)
+
+Convert a conserved-field array with layout `(4, nx, ny)` to primitive
+variables. Optionally provide preallocated output arrays via the keyword
+arguments. Returns a named tuple `(rho, u, v, p)`.
+"""
+function primitive_variables(eq::CompressibleEuler,
+                             conserved::AbstractArray{T,3};
+                             rho_out = nothing,
+                             u_out = nothing,
+                             v_out = nothing,
+                             p_out = nothing) where {T}
+    size(conserved, 1) == 4 ||
+        throw(ArgumentError("Conserved field must have first dimension of length 4"))
+
+    nx, ny = size(conserved, 2), size(conserved, 3)
+
+    ρ = rho_out === nothing ? Array{float(T)}(undef, nx, ny) : rho_out
+    u = u_out === nothing ? similar(ρ) : u_out
+    v = v_out === nothing ? similar(ρ) : v_out
+    p = p_out === nothing ? similar(ρ) : p_out
+
+    @inbounds for j in 1:ny, i in 1:nx
+        prim = primitive_variables(eq,
+                                   conserved[1, i, j],
+                                   conserved[2, i, j],
+                                   conserved[3, i, j],
+                                   conserved[4, i, j])
+        ρ[i, j] = prim.ρ
+        u[i, j] = prim.u
+        v[i, j] = prim.v
+        p[i, j] = prim.p
+    end
+
+    return (; rho = ρ, u = u, v = v, p = p)
+end
+
+primitive_variables(problem::CompressibleEulerProblem,
+                    state; kwargs...) =
+    primitive_variables(pde(problem), solution(state); kwargs...)
+
+primitive_variables(problem::CompressibleEulerProblem,
+                    conserved::AbstractArray{T,3}; kwargs...) where {T} =
+    primitive_variables(pde(problem), conserved; kwargs...)

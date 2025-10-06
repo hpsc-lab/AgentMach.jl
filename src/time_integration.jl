@@ -540,18 +540,8 @@ end
 end
 
 @inline function _thermodynamics(eq::CompressibleEuler, ρ, rhou, rhov, E)
-    ρ > 0 || throw(ArgumentError("Density must remain positive"))
-    invρ = one(ρ) / ρ
-    ux = rhou * invρ
-    uy = rhov * invρ
-    kinetic = 0.5 * ρ * (ux^2 + uy^2)
-    γ = gamma(eq)
-    internal = E - kinetic
-    elT = promote_type(typeof(ρ), typeof(E))
-    internal = max(internal, eps(elT))
-    p = (γ - 1) * internal
-    p = max(p, eps(elT))
-    return ux, uy, p
+    prim = primitive_variables(eq, ρ, rhou, rhov, E)
+    return prim.u, prim.v, prim.p
 end
 
 @inline function _rusanov_flux_x(eq::CompressibleEuler,
