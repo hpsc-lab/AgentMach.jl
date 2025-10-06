@@ -7,7 +7,11 @@ using Plots
     run_kelvin_helmholtz(; nx=256, ny=256, gamma=1.4, final_time=1.5,
                            cfl=0.45, T=Float32, log_every=25,
                            diagnostics_path=nothing,
-                           pdf_path=nothing)
+                           pdf_path=nothing,
+                           animation_path=nothing,
+                           animation_every=10,
+                           animation_fps=24,
+                           progress_interval=10.0)
 
 Simulate the Kelvin-Helmholtz instability for the 2D compressible Euler system on
 [-1, 1]² with periodic boundaries. Returns integration metadata and (optionally)
@@ -20,11 +24,17 @@ function run_kelvin_helmholtz(; nx::Int = 256,
                                cfl::Real = 0.45,
                                T::Type = Float32,
                                log_every::Integer = 25,
-                                 diagnostics_path::Union{Nothing,AbstractString} = nothing,
-                                 pdf_path::Union{Nothing,AbstractString} = nothing)
+                               diagnostics_path::Union{Nothing,AbstractString} = nothing,
+                               pdf_path::Union{Nothing,AbstractString} = nothing,
+                               animation_path::Union{Nothing,AbstractString} = nothing,
+                               animation_every::Integer = 10,
+                               animation_fps::Integer = 24,
+                               progress_interval::Real = 10.0)
     nx >= 3 || throw(ArgumentError("nx must be at least 3"))
     ny >= 3 || throw(ArgumentError("ny must be at least 3"))
     final_time > 0 || throw(ArgumentError("final_time must be positive"))
+    animation_every > 0 || throw(ArgumentError("animation_every must be positive"))
+    animation_fps > 0 || throw(ArgumentError("animation_fps must be positive"))
 
     problem = setup_compressible_euler_problem(nx, ny;
                                                lengths = (2.0, 2.0),
@@ -35,33 +45,48 @@ function run_kelvin_helmholtz(; nx::Int = 256,
     init = _kelvin_helmholtz_initializer(T)
     state = CompressibleEulerState(problem; T = T, init = init)
 
-    time = 0.0
+    sim_time = 0.0
     step = 0
     last_cfl = NaN
     records = diagnostics_path === nothing ? nothing : Vector{NamedTuple{(:step, :time, :cfl, :kinetic_energy),NTuple{4,Float64}}}()
     prim_buffers = primitive_variables(problem, solution(state))
+    last_progress = time()
+    centers_x, centers_y = cell_centers(mesh(problem))
+    animation_obj = animation_path === nothing ? nothing : Animation()
 
-    while time < final_time
+    while sim_time < final_time
         dt = stable_timestep(problem, state; cfl = cfl)
-        if time + dt > final_time
-            dt = final_time - time
+        if sim_time + dt > final_time
+            dt = final_time - sim_time
         end
         dt > 0 || throw(ArgumentError("Encountered non-positive time step"))
 
         rk2_step!(state, problem, dt)
-        time += dt
+        sim_time += dt
         step += 1
 
         cfl_val = cfl_number(problem, state, dt)
-        kinetic = _volume_average_kinetic_energy(state, problem, prim_buffers)
+        kinetic, prim = _volume_average_kinetic_energy(state, problem, prim_buffers)
         last_cfl = cfl_val
 
         if diagnostics_path !== nothing
-            push!(records, (; step = float(step), time = time, cfl = cfl_val, kinetic_energy = kinetic))
+            push!(records, (; step = float(step), time = sim_time, cfl = cfl_val, kinetic_energy = kinetic))
         end
 
         if log_every > 0 && step % log_every == 0
-            @info "Kelvin-Helmholtz" step=step time=time dt=dt cfl=cfl_val kinetic_energy=kinetic
+            @info "Kelvin-Helmholtz" step=step time=sim_time dt=dt cfl=cfl_val kinetic_energy=kinetic
+        end
+
+        now = time()
+        if progress_interval > 0 && (now - last_progress) >= progress_interval
+            @info "Kelvin-Helmholtz progress" step=step sim_time=sim_time dt=dt cfl=cfl_val
+            last_progress = now
+        end
+
+        if animation_obj !== nothing && (step % animation_every == 0 || isapprox(sim_time, final_time; atol = eps(sim_time)))
+            density_plot = _density_plot(centers_x, centers_y, prim.rho;
+                                         title = @sprintf("Density t = %.3f", sim_time))
+            frame(animation_obj, density_plot)
         end
     end
 
@@ -70,16 +95,21 @@ function run_kelvin_helmholtz(; nx::Int = 256,
     end
 
     if pdf_path !== nothing
-        _write_khi_pdf(pdf_path, problem, state, prim_buffers)
+        _write_khi_pdf(pdf_path, problem, state, prim_buffers, centers_x, centers_y)
     end
 
-    return (; final_time = time,
+    if animation_obj !== nothing
+        _finalize_animation(animation_obj, animation_path, animation_fps)
+    end
+
+    return (; final_time = sim_time,
             steps = step,
             cfl_last = last_cfl,
             state = state,
             problem = problem,
             diagnostics = records,
-            pdf_path = pdf_path)
+            pdf_path = pdf_path,
+            animation_path = animation_path)
 end
 
 function _kelvin_helmholtz_initializer(::Type{T}) where {T}
@@ -114,7 +144,7 @@ function _volume_average_kinetic_energy(state::CompressibleEulerState,
         vel2 = prim.u[i, j]^2 + prim.v[i, j]^2
         total += half * prim.rho[i, j] * vel2
     end
-    return float(total) / (nx * ny)
+    return float(total) / (nx * ny), prim
 end
 
 function _write_khi_diagnostics(path::AbstractString,
@@ -131,27 +161,42 @@ end
 function _write_khi_pdf(path::AbstractString,
                         problem::CompressibleEulerProblem,
                         state::CompressibleEulerState,
-                        buffers)
-    mesh_obj = mesh(problem)
-    centers_x, centers_y = cell_centers(mesh_obj)
+                        buffers,
+                        centers_x,
+                        centers_y)
     prim = primitive_variables(problem, solution(state);
                                 rho_out = buffers.rho,
                                 u_out = buffers.u,
                                 v_out = buffers.v,
                                 p_out = buffers.p)
 
+    fig = _density_plot(centers_x, centers_y, prim.rho; title = "Kelvin-Helmholtz density")
+    savefig(fig, path)
+    return path
+end
+
+function _density_plot(centers_x, centers_y, density; title::AbstractString)
     heatmap(centers_x,
             centers_y,
-            prim.rho';
+            density';
             xlabel = "x",
             ylabel = "y",
-            title = "Kelvin-Helmholtz density",
+            title = title,
             colorbar = true,
             aspect_ratio = 1,
             color = cgrad(:coolwarm))
+end
 
-    savefig(path)
-    return path
+function _finalize_animation(anim::Animation, path::AbstractString, fps::Integer)
+    ext = lowercase(splitext(path)[2])
+    if ext == ".mp4"
+        mp4(anim, path; fps = fps)
+    elseif ext == ".gif"
+        gif(anim, path; fps = fps)
+    else
+        @warn "Unknown animation extension; defaulting to GIF" path=path
+        gif(anim, path * ".gif"; fps = fps)
+    end
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

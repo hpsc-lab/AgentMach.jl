@@ -87,4 +87,6 @@ By default the driver uses a 256×256 mesh, RK2 time stepping with adaptive CFL
 control, and prints periodic log messages. Pass a file path via
 `diagnostics_path` to capture per-step CFL and kinetic-energy measurements. The
 routine returns the final state so you can post-process density, vorticity, or
-other derived fields.
+other derived fields. Supply `pdf_path` to snapshot the terminal density field,
+and `animation_path` (MP4 or GIF) plus `animation_every`/`animation_fps` to
+produce a time-resolved movie.
