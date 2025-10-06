@@ -58,3 +58,17 @@ julia --project=. examples/plot_linear_advection.jl diagnostics.csv final_state.
 
 Install `Plots.jl` in your environment first (`import Pkg; Pkg.add("Plots")`).
 The script falls back to a readable error if the dependency is missing.
+
+## Convergence study
+
+To verify spatial accuracy, run the periodic convergence sweep:
+
+```bash
+julia --project=. examples/convergence_linear_advection.jl
+```
+
+The driver evolves a sinusoidal field across five nested grids, prints the L₂
+error at each resolution, estimates the per-level experimental order of
+convergence (EOC), and finishes with the average EOC. Edit
+`run_convergence_study` inside the script to adjust the final time, CFL target,
+or refinement levels.
