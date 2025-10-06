@@ -165,3 +165,5 @@ end
         @test isfile(plot_path)
     end
 end
+
+include("test_compressible_euler.jl")
