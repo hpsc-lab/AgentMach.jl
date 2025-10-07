@@ -90,6 +90,16 @@ end
     serial_u = scalar_component(solution(serial_state))
     ka_u = scalar_component(solution(state))
     @test all(isapprox.(ka_u, serial_u; atol = 1e-10))
+
+    if :metal in available_backends()
+        metal_state = LinearAdvectionState(problem; init = 1.0,
+                                           backend = KernelAbstractionsBackend(:metal))
+        for _ in 1:steps
+            rk2_step!(metal_state, problem, dt)
+        end
+        metal_u = scalar_component(solution(metal_state))
+        @test all(isapprox.(metal_u, serial_u; atol = 1e-10))
+    end
 end
 
 @testset "LinearAdvection RK2" begin

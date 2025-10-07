@@ -18,11 +18,7 @@ KernelAbstractionsBackend(; device = :cpu, workgroupsize = nothing) =
 default_backend() = SerialBackend()
 
 function describe(backend::ExecutionBackend)
-    if backend isa SerialBackend
-        return "SerialBackend"
-    elseif backend isa KernelAbstractionsBackend
-        return "KernelAbstractionsBackend($(backend.device))"
-    else
-        return string(typeof(backend))
-    end
+    backend isa SerialBackend && return "SerialBackend"
+    backend isa KernelAbstractionsBackend && return "KernelAbstractionsBackend($(backend.device))"
+    return string(typeof(backend))
 end

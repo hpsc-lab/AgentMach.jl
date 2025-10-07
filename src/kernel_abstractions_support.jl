@@ -1,11 +1,20 @@
 using KernelAbstractions
 
-const _SUPPORTED_SYMBOLIC_DEVICES = (:cpu,)
+const _DEVICE_REGISTRY = Dict{Symbol,Function}()
+
+function register_backend!(name::Symbol, factory::Function)
+    _DEVICE_REGISTRY[name] = factory
+    return name
+end
+
+available_backends() = collect(keys(_DEVICE_REGISTRY))
 
 function _resolve_ka_device(spec)
     if spec isa Symbol
-        spec === :cpu && return KernelAbstractions.CPU()
-        throw(ArgumentError("Unsupported KernelAbstractions device spec $(spec); supported values: $(_SUPPORTED_SYMBOLIC_DEVICES)"))
+        factory = get(_DEVICE_REGISTRY, spec) do
+            throw(ArgumentError("Unsupported KernelAbstractions device spec $(spec); supported values: $(join(sort!(collect(keys(_DEVICE_REGISTRY))), ", "))"))
+        end
+        return factory()
     elseif spec isa KernelAbstractions.AbstractDevice
         return spec
     else
@@ -344,3 +353,5 @@ end
         dE[i, j] = dE_val
     end
 end
+
+register_backend!(:cpu, () -> KernelAbstractions.CPU())
