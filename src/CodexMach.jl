@@ -8,6 +8,7 @@ simulation_timers() = _SIMULATION_TIMERS
 
 include("mesh.jl")
 include("boundary_conditions.jl")
+include("fields.jl")
 include("equations.jl")
 include("time_integration.jl")
 include("simulation.jl")
@@ -20,6 +21,15 @@ export greet,
        PeriodicBoundaryConditions,
        is_periodic,
        periodic_axes,
+       CellField,
+       cell_components,
+       ncomponents,
+       spatial_size,
+       component,
+       scalar_component,
+       allocate_cellfield,
+       allocate_like,
+       map_components!,
        LinearAdvection,
        LinearAdvectionProblem,
        velocity,

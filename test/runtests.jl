@@ -47,27 +47,29 @@ end
 @testset "LinearAdvection state" begin
     problem = setup_linear_advection_problem(8, 4; velocity = (1.0, 0.0))
     state = LinearAdvectionState(problem; init = 2.0)
-    u = solution(state)
+    u_field = solution(state)
+    u = scalar_component(u_field)
     ws = workspace(state)
 
+    @test size(u_field) == (1, 8, 4)
     @test size(u) == (8, 4)
     @test all(u .== 2.0)
-    @test size(ws.k1) == size(u)
-    @test size(ws.k2) == size(u)
-    @test size(ws.stage) == size(u)
+    @test size(ws.k1) == size(u_field)
+    @test size(ws.k2) == size(u_field)
+    @test size(ws.stage) == size(u_field)
 
     mesh = CodexMach.mesh(problem)
     init_fun(x, y) = x + y
     state_fun = LinearAdvectionState(problem; init = init_fun)
-    u_fun = solution(state_fun)
+    u_fun = scalar_component(solution(state_fun))
     centers_x, centers_y = CodexMach.cell_centers(mesh)
     @inbounds for j in 1:size(u_fun, 2), i in 1:size(u_fun, 1)
         @test isapprox(u_fun[i, j], init_fun(centers_x[i], centers_y[j]); atol = 1e-12)
     end
 
-    fill!(u, 1.0)
-    compute_rhs!(ws.k1, u, problem)
-    @test all(isapprox.(ws.k1, 0.0; atol = 1e-12))
+    fill!(u_field, 1.0)
+    compute_rhs!(ws.k1, u_field, problem)
+    @test all(isapprox.(scalar_component(ws.k1), 0.0; atol = 1e-12))
 end
 
 @testset "LinearAdvection RK2" begin
@@ -83,7 +85,7 @@ end
     rk2_step!(state, problem, dt)
 
     expected = [sin(2pi * (x - dt)) for x in centers_x]
-    u = solution(state)
+    u = scalar_component(solution(state))
     @inbounds for i in 1:nx
         @test isapprox(u[i, 1], expected[i]; atol = 1e-3)
     end
@@ -115,7 +117,7 @@ end
     state = LinearAdvectionState(problem; init = init_fun)
     result = run_linear_advection!(state, problem; steps = 4, dt = dt, record_cfl = true)
     expected = [sin(2pi * (x - 4 * dt)) for x in centers_x]
-    u = solution(state)
+    u = scalar_component(solution(state))
     @inbounds for i in 1:nx
         @test isapprox(u[i, 1], expected[i]; atol = 1e-3)
     end

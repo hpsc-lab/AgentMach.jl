@@ -232,10 +232,51 @@ function primitive_variables(eq::CompressibleEuler,
     return (; rho = ρ, u = u, v = v, p = p)
 end
 
+function primitive_variables(eq::CompressibleEuler,
+                             conserved::CellField;
+                             rho_out = nothing,
+                             u_out = nothing,
+                             v_out = nothing,
+                             p_out = nothing)
+    size(conserved, 1) == 4 ||
+        throw(ArgumentError("Conserved field must have first dimension of length 4"))
+
+    nx, ny = spatial_size(conserved)
+
+    T = component_eltype(conserved)
+    ρ = rho_out === nothing ? Array{float(T)}(undef, nx, ny) : rho_out
+    u = u_out === nothing ? similar(ρ) : u_out
+    v = v_out === nothing ? similar(ρ) : v_out
+    p = p_out === nothing ? similar(ρ) : p_out
+
+    ρc = component(conserved, 1)
+    rhouc = component(conserved, 2)
+    rhovc = component(conserved, 3)
+    Ec = component(conserved, 4)
+
+    @inbounds for j in 1:ny, i in 1:nx
+        prim = primitive_variables(eq,
+                                   ρc[i, j],
+                                   rhouc[i, j],
+                                   rhovc[i, j],
+                                   Ec[i, j])
+        ρ[i, j] = prim.ρ
+        u[i, j] = prim.u
+        v[i, j] = prim.v
+        p[i, j] = prim.p
+    end
+
+    return (; rho = ρ, u = u, v = v, p = p)
+end
+
 primitive_variables(problem::CompressibleEulerProblem,
                     state; kwargs...) =
     primitive_variables(pde(problem), solution(state); kwargs...)
 
 primitive_variables(problem::CompressibleEulerProblem,
                     conserved::AbstractArray{T,3}; kwargs...) where {T} =
+    primitive_variables(pde(problem), conserved; kwargs...)
+
+primitive_variables(problem::CompressibleEulerProblem,
+                    conserved::CellField; kwargs...) =
     primitive_variables(pde(problem), conserved; kwargs...)

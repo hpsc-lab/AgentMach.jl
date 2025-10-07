@@ -78,7 +78,8 @@ function run_linear_advection_demo(; nx::Int = 256,
         _write_diagnostics_csv(diagnostics_path, records)
     end
 
-    final_state = copy(solution(state))
+    final_field = copy(solution(state))
+    final_state = scalar_component(final_field)
     if state_path !== nothing
         _write_state_csv(state_path, problem, final_state)
     end

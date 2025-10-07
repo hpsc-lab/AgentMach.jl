@@ -68,12 +68,12 @@ function LinearAdvectionState(problem::LinearAdvectionProblem;
                               init = nothing)
     mesh_obj = mesh(problem)
     dims = size(mesh_obj)
-    field = _allocate_field(array_type, T, dims)
-    _initialize_field!(field, init, mesh_obj, T)
+    field = allocate_cellfield(array_type, T, dims, 1)
+    _initialize_scalar_field!(field, init, mesh_obj, T)
 
-    k1 = _allocate_field(array_type, T, dims)
-    k2 = _allocate_field(array_type, T, dims)
-    stage = _allocate_field(array_type, T, dims)
+    k1 = allocate_like(field)
+    k2 = allocate_like(field)
+    stage = allocate_like(field)
     fill!(k1, zero(T))
     fill!(k2, zero(T))
     fill!(stage, zero(T))
@@ -81,32 +81,26 @@ function LinearAdvectionState(problem::LinearAdvectionProblem;
     return LinearAdvectionState(field, RK2Workspace(k1, k2, stage))
 end
 
-function _allocate_field(array_type, ::Type{T}, dims::Tuple{Vararg{Int}}) where {T}
-    return array_type{T}(undef, dims...)
-end
-
-function _initialize_field!(field, init, mesh::StructuredMesh, ::Type{T}) where {T}
+function _initialize_scalar_field!(field::CellField, init, mesh::StructuredMesh, ::Type{T}) where {T}
+    data = component(field, 1)
     if init === nothing
-        fill!(field, zero(T))
-        return field
+        fill!(data, zero(T))
     elseif init isa Number
-        fill!(field, T(init))
-        return field
+        fill!(data, T(init))
     elseif init isa AbstractArray
-        size(init) == size(field) ||
+        size(init) == size(data) ||
             throw(ArgumentError("Initializer array must match mesh dimensions"))
-        field .= T.(init)
-        return field
+        data .= T.(init)
     elseif init isa Function
         centers_x, centers_y = cell_centers(mesh)
         nx, ny = size(mesh)
         @inbounds for j in 1:ny, i in 1:nx
-            field[i, j] = T(init(centers_x[i], centers_y[j]))
+            data[i, j] = T(init(centers_x[i], centers_y[j]))
         end
-        return field
     else
         throw(ArgumentError("Unsupported initializer type $(typeof(init))"))
     end
+    return field
 end
 
 const _EulerVarCount = 4
@@ -119,12 +113,12 @@ function CompressibleEulerState(problem::CompressibleEulerProblem;
     dims = size(mesh_obj)
     eq = pde(problem)
 
-    field = _allocate_field(array_type, T, ( _EulerVarCount, dims[1], dims[2]))
+    field = allocate_cellfield(array_type, T, dims, _EulerVarCount)
     _initialize_euler_field!(field, init, mesh_obj, eq, T)
 
-    k1 = _allocate_field(array_type, T, size(field))
-    k2 = _allocate_field(array_type, T, size(field))
-    stage = _allocate_field(array_type, T, size(field))
+    k1 = allocate_like(field)
+    k2 = allocate_like(field)
+    stage = allocate_like(field)
     fill!(k1, zero(T))
     fill!(k2, zero(T))
     fill!(stage, zero(T))
@@ -132,7 +126,11 @@ function CompressibleEulerState(problem::CompressibleEulerProblem;
     return CompressibleEulerState(field, RK2Workspace(k1, k2, stage))
 end
 
-function _initialize_euler_field!(field, init, mesh::StructuredMesh, equation::CompressibleEuler, ::Type{T}) where {T}
+function _initialize_euler_field!(field::CellField,
+                                  init,
+                                  mesh::StructuredMesh,
+                                  equation::CompressibleEuler,
+                                  ::Type{T}) where {T}
     if init === nothing
         fill!(field, zero(T))
         return field
@@ -142,7 +140,9 @@ function _initialize_euler_field!(field, init, mesh::StructuredMesh, equation::C
     elseif init isa AbstractArray
         size(init) == size(field) ||
             throw(ArgumentError("Initializer array must match (4, nx, ny) layout"))
-        field .= T.(init)
+        for comp in 1:ncomponents(field)
+            component(field, comp) .= T.(view(init, comp, :, :))
+        end
         return field
     elseif init isa Function
         centers_x, centers_y = cell_centers(mesh)
@@ -220,16 +220,40 @@ function _rk2_step!(state, problem, dt::Real)
 
     @timeit timer "RK2 step" begin
         @timeit timer "RHS compute" compute_rhs!(ws.k1, u, problem)
-        @timeit timer "Stage predictor" begin
-            @. ws.stage = u + dtT * ws.k1
-        end
+        @timeit timer "Stage predictor" _rk2_stage_predict!(ws.stage, u, ws.k1, dtT)
         @timeit timer "RHS compute" compute_rhs!(ws.k2, ws.stage, problem)
-        @timeit timer "Solution update" begin
-            @. u = u + (dtT * half) * (ws.k1 + ws.k2)
-        end
+        @timeit timer "Solution update" _rk2_solution_update!(u, ws.k1, ws.k2, dtT * half)
     end
 
     return state
+end
+
+@inline function _rk2_stage_predict!(stage::CellField,
+                                     u::CellField,
+                                     rhs::CellField,
+                                     α)
+    n = ncomponents(stage)
+    @inbounds for comp in 1:n
+        stage_comp = component(stage, comp)
+        u_comp = component(u, comp)
+        rhs_comp = component(rhs, comp)
+        @. stage_comp = u_comp + α * rhs_comp
+    end
+    return stage
+end
+
+@inline function _rk2_solution_update!(u::CellField,
+                                       k1::CellField,
+                                       k2::CellField,
+                                       α)
+    n = ncomponents(u)
+    @inbounds for comp in 1:n
+        u_comp = component(u, comp)
+        k1_comp = component(k1, comp)
+        k2_comp = component(k2, comp)
+        @. u_comp = u_comp + α * (k1_comp + k2_comp)
+    end
+    return u
 end
 
 """
@@ -239,9 +263,21 @@ Populate `du` with the spatial derivative of `u` for the PDE described by
 `problem`. Linear advection problems use a second-order upwind stencil, while
 compressible Euler problems employ slope-limited Rusanov fluxes.
 """
+function compute_rhs!(du::CellField,
+                      u::CellField,
+                      problem::LinearAdvectionProblem)
+    return _linear_advection_rhs!(component(du, 1), component(u, 1), problem)
+end
+
 function compute_rhs!(du::AbstractArray{T,2},
                       u::AbstractArray{T,2},
                       problem::LinearAdvectionProblem) where {T}
+    return _linear_advection_rhs!(du, u, problem)
+end
+
+function _linear_advection_rhs!(du::AbstractArray{T,2},
+                                u::AbstractArray{T,2},
+                                problem::LinearAdvectionProblem) where {T}
     mesh_obj = mesh(problem)
     bc = boundary_conditions(problem)
     eq = pde(problem)
@@ -297,9 +333,24 @@ function compute_rhs!(du::AbstractArray{T,2},
     return du
 end
 
+function compute_rhs!(du::CellField,
+                      u::CellField,
+                      problem::CompressibleEulerProblem)
+    return _compressible_euler_rhs!(du, u, problem)
+end
+
 function compute_rhs!(du::AbstractArray{T,3},
                       u::AbstractArray{T,3},
                       problem::CompressibleEulerProblem) where {T}
+    du_field = CellField(ntuple(i -> view(du, i, :, :), Val(_EulerVarCount)))
+    u_field = CellField(ntuple(i -> view(u, i, :, :), Val(_EulerVarCount)))
+    _compressible_euler_rhs!(du_field, u_field, problem)
+    return du
+end
+
+function _compressible_euler_rhs!(du::CellField,
+                                  u::CellField,
+                                  problem::CompressibleEulerProblem)
     mesh_obj = mesh(problem)
     bc = boundary_conditions(problem)
     eq = pde(problem)
@@ -313,12 +364,22 @@ function compute_rhs!(du::AbstractArray{T,3},
     nx >= 3 || throw(ArgumentError("At least three cells required along x"))
     ny >= 3 || throw(ArgumentError("At least three cells required along y"))
 
+    T = component_eltype(u)
     dx, dy = spacing(mesh_obj)
     inv_dx = one(T) / T(dx)
     inv_dy = one(T) / T(dy)
     γ = gamma(eq)
-
     fill!(du, zero(T))
+
+    ρ = component(u, 1)
+    rhou = component(u, 2)
+    rhov = component(u, 3)
+    E = component(u, 4)
+
+    dρ = component(du, 1)
+    drhou = component(du, 2)
+    drhov = component(du, 3)
+    dE = component(du, 4)
 
     # x-direction fluxes
     @inbounds for j in 1:ny
@@ -330,57 +391,57 @@ function compute_rhs!(du::AbstractArray{T,3},
             im = i == 1 ? nx : i - 1
 
             # Slopes for cell i
-            ΔLρ = u[1, i, j] - u[1, im, j]
-            ΔRρ = u[1, ip, j] - u[1, i, j]
-            ΔLrhox = u[2, i, j] - u[2, im, j]
-            ΔRrhox = u[2, ip, j] - u[2, i, j]
-            ΔLrhoy = u[3, i, j] - u[3, im, j]
-            ΔRrhoy = u[3, ip, j] - u[3, i, j]
-            ΔLE = u[4, i, j] - u[4, im, j]
-            ΔRE = u[4, ip, j] - u[4, i, j]
+            ΔLρ = ρ[i, j] - ρ[im, j]
+            ΔRρ = ρ[ip, j] - ρ[i, j]
+            ΔLrhox = rhou[i, j] - rhou[im, j]
+            ΔRrhox = rhou[ip, j] - rhou[i, j]
+            ΔLrhoy = rhov[i, j] - rhov[im, j]
+            ΔRrhoy = rhov[ip, j] - rhov[i, j]
+            ΔLE = E[i, j] - E[im, j]
+            ΔRE = E[ip, j] - E[i, j]
 
             sρ = _minmod(ΔLρ, ΔRρ)
             srhox = _minmod(ΔLrhox, ΔRrhox)
             srhoy = _minmod(ΔLrhoy, ΔRrhoy)
             sE = _minmod(ΔLE, ΔRE)
 
-            ρL = u[1, i, j] + T(0.5) * sρ
-            rhouL = u[2, i, j] + T(0.5) * srhox
-            rhovL = u[3, i, j] + T(0.5) * srhoy
-            EL = u[4, i, j] + T(0.5) * sE
+            ρL = ρ[i, j] + T(0.5) * sρ
+            rhouL = rhou[i, j] + T(0.5) * srhox
+            rhovL = rhov[i, j] + T(0.5) * srhoy
+            EL = E[i, j] + T(0.5) * sE
 
             # Slopes for cell ip
-            ΔLρ_ip = u[1, ip, j] - u[1, i, j]
-            ΔRρ_ip = u[1, ip2, j] - u[1, ip, j]
-            ΔLrhox_ip = u[2, ip, j] - u[2, i, j]
-            ΔRrhox_ip = u[2, ip2, j] - u[2, ip, j]
-            ΔLrhoy_ip = u[3, ip, j] - u[3, i, j]
-            ΔRrhoy_ip = u[3, ip2, j] - u[3, ip, j]
-            ΔLE_ip = u[4, ip, j] - u[4, i, j]
-            ΔRE_ip = u[4, ip2, j] - u[4, ip, j]
+            ΔLρ_ip = ρ[ip, j] - ρ[i, j]
+            ΔRρ_ip = ρ[ip2, j] - ρ[ip, j]
+            ΔLrhox_ip = rhou[ip, j] - rhou[i, j]
+            ΔRrhox_ip = rhou[ip2, j] - rhou[ip, j]
+            ΔLrhoy_ip = rhov[ip, j] - rhov[i, j]
+            ΔRrhoy_ip = rhov[ip2, j] - rhov[ip, j]
+            ΔLE_ip = E[ip, j] - E[i, j]
+            ΔRE_ip = E[ip2, j] - E[ip, j]
 
             sρ_ip = _minmod(ΔLρ_ip, ΔRρ_ip)
             srhox_ip = _minmod(ΔLrhox_ip, ΔRrhox_ip)
             srhoy_ip = _minmod(ΔLrhoy_ip, ΔRrhoy_ip)
             sE_ip = _minmod(ΔLE_ip, ΔRE_ip)
 
-            ρR = u[1, ip, j] - T(0.5) * sρ_ip
-            rhouR = u[2, ip, j] - T(0.5) * srhox_ip
-            rhovR = u[3, ip, j] - T(0.5) * srhoy_ip
-            ER = u[4, ip, j] - T(0.5) * sE_ip
+            ρR = ρ[ip, j] - T(0.5) * sρ_ip
+            rhouR = rhou[ip, j] - T(0.5) * srhox_ip
+            rhovR = rhov[ip, j] - T(0.5) * srhoy_ip
+            ER = E[ip, j] - T(0.5) * sE_ip
 
             flux1, flux2, flux3, flux4 = _rusanov_flux_x(eq, ρL, rhouL, rhovL, EL,
                                                          ρR, rhouR, rhovR, ER)
 
-            du[1, i, j] -= flux1 * inv_dx
-            du[2, i, j] -= flux2 * inv_dx
-            du[3, i, j] -= flux3 * inv_dx
-            du[4, i, j] -= flux4 * inv_dx
+            dρ[i, j] -= flux1 * inv_dx
+            drhou[i, j] -= flux2 * inv_dx
+            drhov[i, j] -= flux3 * inv_dx
+            dE[i, j] -= flux4 * inv_dx
 
-            du[1, ip, j] += flux1 * inv_dx
-            du[2, ip, j] += flux2 * inv_dx
-            du[3, ip, j] += flux3 * inv_dx
-            du[4, ip, j] += flux4 * inv_dx
+            dρ[ip, j] += flux1 * inv_dx
+            drhou[ip, j] += flux2 * inv_dx
+            drhov[ip, j] += flux3 * inv_dx
+            dE[ip, j] += flux4 * inv_dx
         end
     end
 
@@ -390,56 +451,56 @@ function compute_rhs!(du::AbstractArray{T,3},
         jp2 = jp == ny ? 1 : jp + 1
         jm = j == 1 ? ny : j - 1
         for i in 1:nx
-            ΔLρ = u[1, i, j] - u[1, i, jm]
-            ΔRρ = u[1, i, jp] - u[1, i, j]
-            ΔLrhox = u[2, i, j] - u[2, i, jm]
-            ΔRrhox = u[2, i, jp] - u[2, i, j]
-            ΔLrhoy = u[3, i, j] - u[3, i, jm]
-            ΔRrhoy = u[3, i, jp] - u[3, i, j]
-            ΔLE = u[4, i, j] - u[4, i, jm]
-            ΔRE = u[4, i, jp] - u[4, i, j]
+            ΔLρ = ρ[i, j] - ρ[i, jm]
+            ΔRρ = ρ[i, jp] - ρ[i, j]
+            ΔLrhox = rhou[i, j] - rhou[i, jm]
+            ΔRrhox = rhou[i, jp] - rhou[i, j]
+            ΔLrhoy = rhov[i, j] - rhov[i, jm]
+            ΔRrhoy = rhov[i, jp] - rhov[i, j]
+            ΔLE = E[i, j] - E[i, jm]
+            ΔRE = E[i, jp] - E[i, j]
 
             sρ = _minmod(ΔLρ, ΔRρ)
             srhox = _minmod(ΔLrhox, ΔRrhox)
             srhoy = _minmod(ΔLrhoy, ΔRrhoy)
             sE = _minmod(ΔLE, ΔRE)
 
-            ρL = u[1, i, j] + T(0.5) * sρ
-            rhouL = u[2, i, j] + T(0.5) * srhox
-            rhovL = u[3, i, j] + T(0.5) * srhoy
-            EL = u[4, i, j] + T(0.5) * sE
+            ρL = ρ[i, j] + T(0.5) * sρ
+            rhouL = rhou[i, j] + T(0.5) * srhox
+            rhovL = rhov[i, j] + T(0.5) * srhoy
+            EL = E[i, j] + T(0.5) * sE
 
-            ΔLρ_jp = u[1, i, jp] - u[1, i, j]
-            ΔRρ_jp = u[1, i, jp2] - u[1, i, jp]
-            ΔLrhox_jp = u[2, i, jp] - u[2, i, j]
-            ΔRrhox_jp = u[2, i, jp2] - u[2, i, jp]
-            ΔLrhoy_jp = u[3, i, jp] - u[3, i, j]
-            ΔRrhoy_jp = u[3, i, jp2] - u[3, i, jp]
-            ΔLE_jp = u[4, i, jp] - u[4, i, j]
-            ΔRE_jp = u[4, i, jp2] - u[4, i, jp]
+            ΔLρ_jp = ρ[i, jp] - ρ[i, j]
+            ΔRρ_jp = ρ[i, jp2] - ρ[i, jp]
+            ΔLrhox_jp = rhou[i, jp] - rhou[i, j]
+            ΔRrhox_jp = rhou[i, jp2] - rhou[i, jp]
+            ΔLrhoy_jp = rhov[i, jp] - rhov[i, j]
+            ΔRrhoy_jp = rhov[i, jp2] - rhov[i, jp]
+            ΔLE_jp = E[i, jp] - E[i, j]
+            ΔRE_jp = E[i, jp2] - E[i, jp]
 
             sρ_jp = _minmod(ΔLρ_jp, ΔRρ_jp)
             srhox_jp = _minmod(ΔLrhox_jp, ΔRrhox_jp)
             srhoy_jp = _minmod(ΔLrhoy_jp, ΔRrhoy_jp)
             sE_jp = _minmod(ΔLE_jp, ΔRE_jp)
 
-            ρR = u[1, i, jp] - T(0.5) * sρ_jp
-            rhouR = u[2, i, jp] - T(0.5) * srhox_jp
-            rhovR = u[3, i, jp] - T(0.5) * srhoy_jp
-            ER = u[4, i, jp] - T(0.5) * sE_jp
+            ρR = ρ[i, jp] - T(0.5) * sρ_jp
+            rhouR = rhou[i, jp] - T(0.5) * srhox_jp
+            rhovR = rhov[i, jp] - T(0.5) * srhoy_jp
+            ER = E[i, jp] - T(0.5) * sE_jp
 
             flux1, flux2, flux3, flux4 = _rusanov_flux_y(eq, ρL, rhouL, rhovL, EL,
                                                          ρR, rhouR, rhovR, ER)
 
-            du[1, i, j] -= flux1 * inv_dy
-            du[2, i, j] -= flux2 * inv_dy
-            du[3, i, j] -= flux3 * inv_dy
-            du[4, i, j] -= flux4 * inv_dy
+            dρ[i, j] -= flux1 * inv_dy
+            drhou[i, j] -= flux2 * inv_dy
+            drhov[i, j] -= flux3 * inv_dy
+            dE[i, j] -= flux4 * inv_dy
 
-            du[1, i, jp] += flux1 * inv_dy
-            du[2, i, jp] += flux2 * inv_dy
-            du[3, i, jp] += flux3 * inv_dy
-            du[4, i, jp] += flux4 * inv_dy
+            dρ[i, jp] += flux1 * inv_dy
+            drhou[i, jp] += flux2 * inv_dy
+            drhov[i, jp] += flux3 * inv_dy
+            dE[i, jp] += flux4 * inv_dy
         end
     end
 
@@ -510,16 +571,21 @@ function cfl_number(problem::CompressibleEulerProblem,
     max_ax = zero(eltype(u))
     max_ay = zero(eltype(u))
 
+    ρ = component(u, 1)
+    rhou = component(u, 2)
+    rhov = component(u, 3)
+    E = component(u, 4)
+
     @inbounds for j in 1:ny, i in 1:nx
-        ρ = u[1, i, j]
-        rhou = u[2, i, j]
-        rhov = u[3, i, j]
-        E = u[4, i, j]
-        invρ = one(ρ) / ρ
-        ux = rhou * invρ
-        uy = rhov * invρ
-        kinetic = 0.5 * ρ * (ux^2 + uy^2)
-        p = (γ - one(γ)) * (E - kinetic)
+        ρval = ρ[i, j]
+        rhouval = rhou[i, j]
+        rhovval = rhov[i, j]
+        Eval = E[i, j]
+        invρ = one(ρval) / ρval
+        ux = rhouval * invρ
+        uy = rhovval * invρ
+        kinetic = 0.5 * ρval * (ux^2 + uy^2)
+        p = (γ - one(γ)) * (Eval - kinetic)
         c = sqrt(abs(γ * p * invρ))
         max_ax = max(max_ax, abs(ux) + c)
         max_ay = max(max_ay, abs(uy) + c)
@@ -549,16 +615,21 @@ function stable_timestep(problem::CompressibleEulerProblem,
     max_ax = zero(eltype(u))
     max_ay = zero(eltype(u))
 
+    ρ = component(u, 1)
+    rhou = component(u, 2)
+    rhov = component(u, 3)
+    E = component(u, 4)
+
     @inbounds for j in 1:ny, i in 1:nx
-        ρ = u[1, i, j]
-        rhou = u[2, i, j]
-        rhov = u[3, i, j]
-        E = u[4, i, j]
-        invρ = one(ρ) / ρ
-        ux = rhou * invρ
-        uy = rhov * invρ
-        kinetic = 0.5 * ρ * (ux^2 + uy^2)
-        p = (γ - one(γ)) * (E - kinetic)
+        ρval = ρ[i, j]
+        rhouval = rhou[i, j]
+        rhovval = rhov[i, j]
+        Eval = E[i, j]
+        invρ = one(ρval) / ρval
+        ux = rhouval * invρ
+        uy = rhovval * invρ
+        kinetic = 0.5 * ρval * (ux^2 + uy^2)
+        p = (γ - one(γ)) * (Eval - kinetic)
         c = sqrt(abs(γ * p * invρ))
         max_ax = max(max_ax, abs(ux) + c)
         max_ay = max(max_ay, abs(uy) + c)
