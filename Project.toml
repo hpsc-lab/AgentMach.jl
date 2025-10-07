@@ -10,6 +10,7 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [extras]
 Metal = "dde4c033-4e86-5a71-bd2e-8d6045ea3b36"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 
 [weakdeps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
@@ -21,6 +22,7 @@ CodexMachMetalExt = "Metal"
 
 [compat]
 KernelAbstractions = "0.9.38"
+CUDA = "5"
 Metal = "1"
 Plots = "1.41.1"
 TimerOutputs = "0.5.29"

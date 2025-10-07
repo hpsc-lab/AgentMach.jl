@@ -91,7 +91,7 @@ end
     ka_u = scalar_component(solution(state))
     @test all(isapprox.(ka_u, serial_u; atol = 1e-10))
 
-    if Sys.isapple() && :metal in available_backends()
+    if :metal in available_backends()
         metal_state = LinearAdvectionState(problem; init = 1.0,
                                            backend = KernelAbstractionsBackend(:metal))
         for _ in 1:steps
@@ -99,6 +99,16 @@ end
         end
         metal_u = scalar_component(solution(metal_state))
         @test all(isapprox.(metal_u, serial_u; atol = 1e-10))
+    end
+
+    if :cuda in available_backends()
+        cuda_state = LinearAdvectionState(problem; init = 1.0,
+                                          backend = KernelAbstractionsBackend(:cuda))
+        for _ in 1:steps
+            rk2_step!(cuda_state, problem, dt)
+        end
+        cuda_u = scalar_component(solution(cuda_state))
+        @test all(isapprox.(cuda_u, serial_u; atol = 1e-10))
     end
 end
 
