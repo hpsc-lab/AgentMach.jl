@@ -16,9 +16,10 @@ end
 Hold the cell-centered solution field alongside scratch buffers required by the
 RK2 integrator.
 """
-struct LinearAdvectionState{A,W}
+struct LinearAdvectionState{A,W,B}
     solution::A
     workspace::W
+    backend::B
 end
 
 """
@@ -36,14 +37,22 @@ Access the Runge-Kutta scratch buffers bundled with `state`.
 workspace(state::LinearAdvectionState) = state.workspace
 
 """
+    backend(state)
+
+Return the execution backend associated with `state`.
+"""
+backend(state::LinearAdvectionState) = state.backend
+
+"""
     CompressibleEulerState(solution, workspace)
 
 Hold the conserved variables for the compressible Euler system along with RK2
 scratch storage.
 """
-struct CompressibleEulerState{A,W}
+struct CompressibleEulerState{A,W,B}
     solution::A
     workspace::W
+    backend::B
 end
 
 """
@@ -60,12 +69,15 @@ Access the Runge-Kutta scratch buffers bundled with `state`.
 """
 workspace(state::CompressibleEulerState) = state.workspace
 
+backend(state::CompressibleEulerState) = state.backend
+
 const _DefaultArrayType = Array
 
 function LinearAdvectionState(problem::LinearAdvectionProblem;
                               T::Type = Float64,
                               array_type = _DefaultArrayType,
-                              init = nothing)
+                              init = nothing,
+                              backend::ExecutionBackend = default_backend())
     mesh_obj = mesh(problem)
     dims = size(mesh_obj)
     field = allocate_cellfield(array_type, T, dims, 1)
@@ -78,7 +90,7 @@ function LinearAdvectionState(problem::LinearAdvectionProblem;
     fill!(k2, zero(T))
     fill!(stage, zero(T))
 
-    return LinearAdvectionState(field, RK2Workspace(k1, k2, stage))
+    return LinearAdvectionState(field, RK2Workspace(k1, k2, stage), backend)
 end
 
 function _initialize_scalar_field!(field::CellField, init, mesh::StructuredMesh, ::Type{T}) where {T}
@@ -108,7 +120,8 @@ const _EulerVarCount = 4
 function CompressibleEulerState(problem::CompressibleEulerProblem;
                                 T::Type = Float64,
                                 array_type = _DefaultArrayType,
-                                init = nothing)
+                                init = nothing,
+                                backend::ExecutionBackend = default_backend())
     mesh_obj = mesh(problem)
     dims = size(mesh_obj)
     eq = pde(problem)
@@ -123,7 +136,7 @@ function CompressibleEulerState(problem::CompressibleEulerProblem;
     fill!(k2, zero(T))
     fill!(stage, zero(T))
 
-    return CompressibleEulerState(field, RK2Workspace(k1, k2, stage))
+    return CompressibleEulerState(field, RK2Workspace(k1, k2, stage), backend)
 end
 
 function _initialize_euler_field!(field::CellField,
@@ -211,6 +224,17 @@ function rk2_step!(state::CompressibleEulerState,
 end
 
 function _rk2_step!(state, problem, dt::Real)
+    backend_obj = backend(state)
+    if backend_obj isa SerialBackend
+        return _rk2_step_serial!(state, problem, dt)
+    elseif backend_obj isa KernelAbstractionsBackend
+        throw(ArgumentError("KernelAbstractions backends are not yet implemented for time integration"))
+    else
+        throw(ArgumentError("Unsupported execution backend $(describe(backend_obj))"))
+    end
+end
+
+function _rk2_step_serial!(state, problem, dt::Real)
     u = solution(state)
     ws = workspace(state)
     Tsol = eltype(u)

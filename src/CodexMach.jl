@@ -9,6 +9,7 @@ simulation_timers() = _SIMULATION_TIMERS
 include("mesh.jl")
 include("boundary_conditions.jl")
 include("fields.jl")
+include("backends.jl")
 include("equations.jl")
 include("time_integration.jl")
 include("simulation.jl")
@@ -30,6 +31,11 @@ export greet,
        allocate_cellfield,
        allocate_like,
        map_components!,
+       ExecutionBackend,
+        SerialBackend,
+        KernelAbstractionsBackend,
+        default_backend,
+        describe,
        LinearAdvection,
        LinearAdvectionProblem,
        velocity,
@@ -41,6 +47,7 @@ export greet,
        RK2Workspace,
        solution,
        workspace,
+        backend,
        compute_rhs!,
        rk2_step!,
        cfl_number,

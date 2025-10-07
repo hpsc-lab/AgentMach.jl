@@ -51,6 +51,8 @@ end
     u = scalar_component(u_field)
     ws = workspace(state)
 
+    @test backend(state) isa SerialBackend
+
     @test size(u_field) == (1, 8, 4)
     @test size(u) == (8, 4)
     @test all(u .== 2.0)
@@ -70,6 +72,14 @@ end
     fill!(u_field, 1.0)
     compute_rhs!(ws.k1, u_field, problem)
     @test all(isapprox.(scalar_component(ws.k1), 0.0; atol = 1e-12))
+end
+
+@testset "Backends" begin
+    problem = setup_linear_advection_problem(8, 4; velocity = (0.0, 0.0))
+    ka_backend = KernelAbstractionsBackend(:cpu)
+    state = LinearAdvectionState(problem; init = 1.0, backend = ka_backend)
+    @test backend(state) === ka_backend
+    @test_throws ArgumentError run_linear_advection!(state, problem; steps = 1, dt = 0.1)
 end
 
 @testset "LinearAdvection RK2" begin
