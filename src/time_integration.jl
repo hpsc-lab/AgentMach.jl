@@ -331,7 +331,7 @@ function _rk2_step_euler_ka!(state::CompressibleEulerState,
     timer = simulation_timers()
 
     @timeit timer "RK2 step" begin
-        @timeit timer "RHS compute" compute_rhs!(ws.k1, u_field, problem)
+        @timeit timer "RHS compute" _compressible_euler_rhs_ka!(backend_obj, ws.k1, u_field, problem)
         @timeit timer "Stage predictor" begin
             for comp in 1:ncomponents(u_field)
                 rk2_stage_kernel!(backend_obj,
@@ -341,7 +341,7 @@ function _rk2_step_euler_ka!(state::CompressibleEulerState,
                                   dtT)
             end
         end
-        @timeit timer "RHS compute" compute_rhs!(ws.k2, ws.stage, problem)
+        @timeit timer "RHS compute" _compressible_euler_rhs_ka!(backend_obj, ws.k2, ws.stage, problem)
         @timeit timer "Solution update" begin
             for comp in 1:ncomponents(u_field)
                 rk2_update_kernel!(backend_obj,
@@ -354,6 +354,44 @@ function _rk2_step_euler_ka!(state::CompressibleEulerState,
     end
 
     return state
+end
+
+function _compressible_euler_rhs_ka!(backend::KernelAbstractionsBackend,
+                                     du::CellField,
+                                     u::CellField,
+                                     problem::CompressibleEulerProblem)
+    mesh_obj = mesh(problem)
+    nx, ny = size(mesh_obj)
+    eq = pde(problem)
+    T = component_eltype(u)
+    dx, dy = spacing(mesh_obj)
+    inv_dx = T(1) / T(dx)
+    inv_dy = T(1) / T(dy)
+    γ = T(gamma(eq))
+
+    for comp in 1:ncomponents(du)
+        fill!(component(du, comp), zero(T))
+    end
+
+    dρ = component(du, 1)
+    drhou = component(du, 2)
+    drhov = component(du, 3)
+    dE = component(du, 4)
+
+    ρ = component(u, 1)
+    rhou = component(u, 2)
+    rhov = component(u, 3)
+    E = component(u, 4)
+
+    device = _resolve_ka_device(backend.device)
+    kernel = backend.workgroupsize === nothing ?
+        _compressible_euler_rhs_kernel!(device) :
+        _compressible_euler_rhs_kernel!(device, backend.workgroupsize)
+    kernel(dρ, drhou, drhov, dE,
+           ρ, rhou, rhov, E,
+           γ, inv_dx, inv_dy; ndrange = (nx, ny))
+    KernelAbstractions.synchronize(device)
+    return du
 end
 
 @inline function _rk2_stage_predict!(stage::CellField,
