@@ -27,30 +27,28 @@ The repository ships with a bare `docs/` folder ready to host Documenter.jl-base
 
 ## Example simulation
 
-The `examples/linear_advection_demo.jl` script wires together mesh generation,
-problem setup, RK2 time integration, and the high-level driver. Run it from the
-repository root:
+Run the linear advection demo on the CPU:
 
 ```bash
-julia --project=. examples/linear_advection_demo.jl
+julia --project=run examples/linear_advection_demo.jl
 ```
 
-It prints periodic RMS diagnostics along with the CFL number used for the run.
-The driver defaults to the serial backend with `Float64` storage, but you can
-switch to a registered KernelAbstractions backend (dropping to `Float32` by
-default on GPUs) via keyword arguments:
+Run the same demo on a Metal-capable GPU:
 
 ```bash
-julia --project=. -e 'include("examples/linear_advection_demo.jl"); run_linear_advection_demo(backend=:metal)'
+julia --project=run -e 'using Metal; include("examples/linear_advection_demo.jl"); run_linear_advection_demo(backend=:metal)'
 ```
 
-Override the precision explicitly with `state_eltype=Float64` if you want to run
-the GPU case in double precision (CUDA) or stay on `Float32` for Metal.
+The script wires together mesh generation, problem setup, RK2 time integration,
+and the high-level driver. It prints periodic RMS diagnostics along with the CFL
+number used for the run. Override the precision explicitly with
+`state_eltype=Float64` if you want to run the GPU case in double precision (CUDA)
+or stay on `Float32` for Metal.
 
 To capture diagnostics, pass output paths (created if missing):
 
 ```bash
-julia --project=. examples/linear_advection_demo.jl diagnostics.csv final_state.csv
+julia --project=run examples/linear_advection_demo.jl diagnostics.csv final_state.csv
 ```
 
 The first file lists sampled step/time/RMS/CFL data, and the second stores the
@@ -62,7 +60,7 @@ To render the sampled diagnostics (and optionally the final field), use the
 helper script:
 
 ```bash
-julia --project=. examples/plot_linear_advection.jl diagnostics.csv final_state.csv plot.png
+julia --project=run examples/plot_linear_advection.jl diagnostics.csv final_state.csv plot.png
 ```
 
 Install `Plots.jl` in your environment first (`import Pkg; Pkg.add("Plots")`).
@@ -70,10 +68,16 @@ The script falls back to a readable error if the dependency is missing.
 
 ## Convergence study
 
-To verify spatial accuracy, run the periodic convergence sweep:
+CPU run:
 
 ```bash
-julia --project=. examples/convergence_linear_advection.jl
+julia --project=run examples/convergence_linear_advection.jl
+```
+
+Metal GPU run:
+
+```bash
+julia --project=run -e 'using Metal; include("examples/convergence_linear_advection.jl"); run_convergence_study(backend=:metal, levels=4)'
 ```
 
 The driver evolves a sinusoidal field across five nested grids, prints the L₂
@@ -82,20 +86,18 @@ convergence (EOC), and finishes with the average EOC. Edit
 `run_convergence_study` inside the script to adjust the final time, CFL target,
 or refinement levels.
 
-To exercise a GPU backend, reuse the `backend` keyword:
-
-```bash
-julia --project=. -e 'include("examples/convergence_linear_advection.jl"); run_convergence_study(backend=:metal, levels=4)'
-```
-
 ## Kelvin-Helmholtz instability
 
-The compressible Euler path is exercised by
-`examples/kelvin_helmholtz_euler.jl`, which seeds a periodic Kelvin-Helmholtz
-roll-up on a square box:
+CPU run:
 
 ```bash
-julia --project=. examples/kelvin_helmholtz_euler.jl
+julia --project=run examples/kelvin_helmholtz_euler.jl
+```
+
+Metal GPU run:
+
+```bash
+julia --project=run -e 'using Metal; include("examples/kelvin_helmholtz_euler.jl"); run_kelvin_helmholtz(backend=:metal, final_time=1.0)'
 ```
 
 By default the driver uses a 256×256 mesh, RK2 time stepping with adaptive CFL
@@ -113,7 +115,7 @@ snapshot the terminal density field, and `animation_path` (MP4 or GIF) plus
 Compare the serial and GPU paths with the profiling helper:
 
 ```bash
-julia --project=. examples/profile_backends.jl
+julia --project=run examples/profile_backends.jl
 ```
 
 It benchmarks the RK2 loops for linear advection and compressible Euler across
