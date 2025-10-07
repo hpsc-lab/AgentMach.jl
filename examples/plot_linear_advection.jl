@@ -5,27 +5,30 @@ using Plots
     plot_linear_advection_csv(diagnostics_path; state_path,
                                heatmap_path="linear_advection_fields.pdf",
                                profiles_path="linear_advection_profiles.pdf",
-                               output_path=nothing)
+                               output_path=nothing,
+                               velocity=(1.0, 0.0))
 
 Load diagnostics and state CSV files produced by `linear_advection_demo.jl` and
-emit two PDF figures: one with side-by-side heatmaps of the analytical initial
-condition and the simulated final state, and another comparing initial vs final
-profiles along the domain diagonal and along the mid-plane in `y`.
+emit two PDF figures: one with side-by-side heatmaps of the simulated final
+state and the analytical solution at the same time, and another comparing final
+vs exact profiles along the domain diagonal and along the mid-plane in `y`.
 """
 function plot_linear_advection_csv(diagnostics_path::AbstractString;
                                    state_path::Union{Nothing,AbstractString} = nothing,
                                    heatmap_path::AbstractString = "linear_advection_fields.pdf",
                                    profiles_path::AbstractString = "linear_advection_profiles.pdf",
-                                   output_path::Union{Nothing,AbstractString} = nothing)
+                                   output_path::Union{Nothing,AbstractString} = nothing,
+                                   velocity::Tuple{<:Real,<:Real} = (1.0, 0.0))
     diagnostics = _read_diagnostics_csv(diagnostics_path)
     state_path === nothing &&
         throw(ArgumentError("State CSV is required to build heatmap and profile plots"))
     state_records = _read_state_csv(state_path)
 
-    init_field = _build_initial_field(state_records)
+    final_time = isempty(diagnostics.time) ? 0.0 : diagnostics.time[end]
+    exact_field = _build_exact_field(state_records, final_time; velocity = velocity)
 
-    heatmap_fig = _build_heatmap_figure(state_records, init_field)
-    profiles_fig = _build_profiles_figure(state_records, init_field)
+    heatmap_fig = _build_heatmap_figure(state_records, exact_field)
+    profiles_fig = _build_profiles_figure(state_records, exact_field)
 
     if output_path !== nothing
         savefig(heatmap_fig, output_path)
@@ -103,31 +106,7 @@ function _read_state_csv(path::AbstractString)
             u = field)
 end
 
-function _build_initial_field(data)
-    nx, ny = size(data.u)
-    init = similar(data.u)
-    centers_x = data.x
-    centers_y = data.y
-
-    nx >= 1 || ny >= 1 || throw(ArgumentError("State field is empty"))
-
-    centers_x_vec = vec(centers_x[:, 1])
-    centers_y_vec = vec(centers_y[1, :])
-    dx = nx > 1 ? centers_x_vec[2] - centers_x_vec[1] : centers_y_vec[2] - centers_y_vec[1]
-    dy = ny > 1 ? centers_y_vec[2] - centers_y_vec[1] : dx
-    Lx = dx * nx
-    Ly = dy * ny
-
-    init_fun = _sine_blob_initializer((Lx, Ly))
-
-    @inbounds for j in 1:ny, i in 1:nx
-        init[i, j] = init_fun(centers_x[i, j], centers_y[i, j])
-    end
-
-    return init
-end
-
-function _build_heatmap_figure(data, init_field)
+function _build_heatmap_figure(data, exact_field)
     centers_x = vec(data.x[:, 1])
     centers_y = vec(data.y[1, :])
     nx = length(centers_x)
@@ -139,29 +118,29 @@ function _build_heatmap_figure(data, init_field)
     ly = max(dy * ny, eps())
     aspect = ly / lx
 
-    init_plot = heatmap(centers_x, centers_y, init_field;
-                        xlabel = "x",
-                        ylabel = "y",
-                        title = "Initial field",
-                        colorbar = true,
-                        aspect_ratio = aspect)
     final_plot = heatmap(centers_x, centers_y, data.u;
                          xlabel = "x",
                          ylabel = "y",
                          title = "Final field",
                          colorbar = true,
                          aspect_ratio = aspect)
+    exact_plot = heatmap(centers_x, centers_y, exact_field;
+                         xlabel = "x",
+                         ylabel = "y",
+                         title = "Exact field",
+                         colorbar = true,
+                         aspect_ratio = aspect)
 
-    return plot(init_plot, final_plot; layout = (1, 2), size = (900, 400))
+    return plot(final_plot, exact_plot; layout = (1, 2), size = (900, 400))
 end
 
-function _build_profiles_figure(data, init_field)
+function _build_profiles_figure(data, exact_field)
     nx, ny = size(data.u)
     n_diag = min(nx, ny)
     idxs = collect(1:n_diag)
     x_diag = [data.x[i, i] for i in idxs]
     numerical = [data.u[i, i] for i in idxs]
-    initial_diag = [init_field[i, i] for i in idxs]
+    exact_diag = [exact_field[i, i] for i in idxs]
 
     centers_x = vec(data.x[:, 1])
     centers_y = vec(data.y[1, :])
@@ -172,31 +151,61 @@ function _build_profiles_figure(data, init_field)
     ly = dy * ny
     origin_y = centers_y[1] - dy / 2
 
-    diagonal_plot = plot(x_diag, initial_diag;
+    diagonal_plot = plot(x_diag, numerical;
                          xlabel = "x along diagonal",
                          ylabel = "u",
-                         label = "Initial",
+                         label = "Final",
                          title = "Diagonal profile",
                          legend = :bottomleft)
-    plot!(diagonal_plot, x_diag, numerical;
-          label = "Final")
+    plot!(diagonal_plot, x_diag, exact_diag;
+          label = "Exact")
 
     y_mid = origin_y + ly / 2
     j_center = argmin(abs.(centers_y .- y_mid))
     x_line = data.x[:, j_center]
     final_line = data.u[:, j_center]
-    initial_line = init_field[:, j_center]
+    exact_line = exact_field[:, j_center]
 
-    center_plot = plot(x_line, initial_line;
+    center_plot = plot(x_line, final_line;
                        xlabel = "x at y = $(round(centers_y[j_center]; digits = 4))",
                        ylabel = "u",
-                       label = "Initial",
+                       label = "Final",
                        title = "Mid-plane profile",
                        legend = :bottomleft)
-    plot!(center_plot, x_line, final_line;
-          label = "Final")
+    plot!(center_plot, x_line, exact_line;
+          label = "Exact")
 
     return plot(diagonal_plot, center_plot; layout = (1, 2), size = (900, 400))
+end
+
+function _build_exact_field(data, elapsed_time; velocity::Tuple{<:Real,<:Real})
+    nx, ny = size(data.u)
+    nx >= 1 || ny >= 1 || throw(ArgumentError("State field is empty"))
+
+    centers_x = vec(data.x[:, 1])
+    centers_y = vec(data.y[1, :])
+
+    dx = nx > 1 ? centers_x[2] - centers_x[1] : (ny > 1 ? centers_y[2] - centers_y[1] : 1.0)
+    dy = ny > 1 ? centers_y[2] - centers_y[1] : dx
+    Lx = dx * nx
+    Ly = dy * ny
+
+    x_origin = centers_x[1] - dx / 2
+    y_origin = centers_y[1] - dy / 2
+
+    vx, vy = float.(velocity)
+    init_fun = _sine_blob_initializer((Lx, Ly))
+    exact = similar(data.u)
+
+    wrap(value, origin, period) = origin + mod(value - origin, period)
+
+    @inbounds for j in 1:ny, i in 1:nx
+        x_adv = wrap(data.x[i, j] - vx * elapsed_time, x_origin, Lx)
+        y_adv = wrap(data.y[i, j] - vy * elapsed_time, y_origin, Ly)
+        exact[i, j] = init_fun(x_adv, y_adv)
+    end
+
+    return exact
 end
 
 function _sine_blob_initializer(lengths::NTuple{2,<:Real})

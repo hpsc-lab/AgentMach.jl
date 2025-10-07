@@ -2,7 +2,7 @@
 using CodexMach
 
 """
-    run_linear_advection_demo(; nx=256, ny=128, lengths=(2.0, 1.0),
+    run_linear_advection_demo(; nx=512, ny=256, lengths=(2.0, 1.0),
                                velocity=(1.0, 0.0), cfl=0.4, steps=100,
                                backend=default_backend(), state_eltype=nothing,
                                sample_every=nothing,
@@ -17,8 +17,8 @@ an integer number of domain traversals, bringing the final state back to the
 initial configuration. Optionally write diagnostics and the final state to disk;
 visualization lives in `plot_linear_advection.jl`.
 """
-function run_linear_advection_demo(; nx::Int = 256,
-                                    ny::Int = 128,
+function run_linear_advection_demo(; nx::Int = 512,
+                                    ny::Int = 256,
                                     lengths::NTuple{2,<:Real} = (2.0, 1.0),
                                     velocity::Tuple{<:Real,<:Real} = (1.0, 0.0),
                                     cfl::Real = 0.4,
@@ -230,7 +230,7 @@ function main()
     diagnostics_path = length(ARGS) >= 1 ? ARGS[1] : nothing
     state_path = length(ARGS) >= 2 ? ARGS[2] : nothing
 
-    summary = run_linear_advection_demo(; nx=64, ny=32, diagnostics_path = diagnostics_path,
+    summary = run_linear_advection_demo(; nx=128, ny=64, diagnostics_path = diagnostics_path,
                                          state_path = state_path)
     @info "Demo complete" final_time = summary.final_time dt = summary.dt cfl = summary.cfl samples = length(summary.diagnostics) nx = summary.nx ny = summary.ny target_time = summary.target_time
 
