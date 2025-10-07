@@ -48,6 +48,7 @@ CompressibleEulerProblem
 setup_compressible_euler_problem
 CompressibleEulerState
 primitive_variables
+_primitive_variables_cpu
 ```
 
 ## Time Integration
@@ -60,6 +61,20 @@ compute_rhs!
 rk2_step!
 stable_timestep
 cfl_number
+```
+
+## Cell Fields
+
+```@docs
+CellField
+allocate_cellfield
+allocate_like
+map_components!
+cell_components
+component
+ncomponents
+spatial_size
+backend
 ```
 
 ## Simulation Drivers

@@ -8,6 +8,9 @@ simulation_timers() = _SIMULATION_TIMERS
 
 include("mesh.jl")
 include("boundary_conditions.jl")
+include("fields.jl")
+include("backends.jl")
+include("kernel_abstractions_support.jl")
 include("equations.jl")
 include("time_integration.jl")
 include("simulation.jl")
@@ -20,6 +23,22 @@ export greet,
        PeriodicBoundaryConditions,
        is_periodic,
        periodic_axes,
+       CellField,
+       cell_components,
+       ncomponents,
+       spatial_size,
+       component,
+       scalar_component,
+       allocate_cellfield,
+       allocate_like,
+       map_components!,
+       register_backend!,
+        available_backends,
+       ExecutionBackend,
+        SerialBackend,
+        KernelAbstractionsBackend,
+        default_backend,
+        describe,
        LinearAdvection,
        LinearAdvectionProblem,
        velocity,
@@ -31,6 +50,7 @@ export greet,
        RK2Workspace,
        solution,
        workspace,
+        backend,
        compute_rhs!,
        rk2_step!,
        cfl_number,

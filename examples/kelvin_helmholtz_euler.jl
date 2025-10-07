@@ -5,7 +5,7 @@ using Plots
 
 """
     run_kelvin_helmholtz(; nx=256, ny=256, gamma=1.4, final_time=1.5,
-                           cfl=0.45, T=Float32, log_every=25,
+                           cfl=0.45, T=Float32, backend=default_backend(), log_every=25,
                            diagnostics_path=nothing,
                            pdf_path=nothing,
                            animation_path=nothing,
@@ -22,7 +22,8 @@ function run_kelvin_helmholtz(; nx::Int = 256,
                                gamma::Real = 1.4,
                                final_time::Real = 1.5,
                                cfl::Real = 0.45,
-                               T::Type = Float32,
+                               T::Union{Type,Nothing} = Float32,
+                               backend::Union{ExecutionBackend,Symbol} = default_backend(),
                                log_every::Integer = 25,
                                diagnostics_path::Union{Nothing,AbstractString} = nothing,
                                pdf_path::Union{Nothing,AbstractString} = nothing,
@@ -42,14 +43,18 @@ function run_kelvin_helmholtz(; nx::Int = 256,
                                                gamma = gamma,
                                                boundary_conditions = PeriodicBoundaryConditions())
 
-    init = _kelvin_helmholtz_initializer(T)
-    state = CompressibleEulerState(problem; T = T, init = init)
+    backend_obj = _resolve_example_backend(backend)
+    state_T = isnothing(T) ? _default_state_eltype(backend_obj) : T
+
+    init = _kelvin_helmholtz_initializer(state_T)
+    state = CompressibleEulerState(problem; T = state_T, init = init, backend = backend_obj)
 
     sim_time = 0.0
     step = 0
     last_cfl = NaN
     records = diagnostics_path === nothing ? nothing : Vector{NamedTuple{(:step, :time, :cfl, :kinetic_energy),NTuple{4,Float64}}}()
-    prim_buffers = primitive_variables(problem, solution(state))
+    prim_buffers = primitive_variables(problem, solution(state);
+                                       backend = CodexMach.backend(state))
     last_progress = time()
     centers_x, centers_y = cell_centers(mesh(problem))
     animation_obj = animation_path === nothing ? nothing : Animation()
@@ -112,6 +117,22 @@ function run_kelvin_helmholtz(; nx::Int = 256,
             animation_path = animation_path)
 end
 
+function _resolve_example_backend(spec::ExecutionBackend)
+    return spec
+end
+
+function _resolve_example_backend(spec::Symbol)
+    return KernelAbstractionsBackend(spec)
+end
+
+function _default_state_eltype(::ExecutionBackend)
+    return Float64
+end
+
+function _default_state_eltype(::KernelAbstractionsBackend)
+    return Float32
+end
+
 function _kelvin_helmholtz_initializer(::Type{T}) where {T}
     slope = T(15)
     offset = T(7.5)
@@ -132,19 +153,31 @@ function _volume_average_kinetic_energy(state::CompressibleEulerState,
                                         problem::CompressibleEulerProblem,
                                         buffers)
     prim = primitive_variables(problem, solution(state);
+                                backend = CodexMach.backend(state),
                                 rho_out = buffers.rho,
                                 u_out = buffers.u,
                                 v_out = buffers.v,
                                 p_out = buffers.p)
 
-    nx, ny = size(prim.rho)
-    total = zero(eltype(prim.rho))
-    half = convert(eltype(prim.rho), 0.5)
-    @inbounds for j in 1:ny, i in 1:nx
-        vel2 = prim.u[i, j]^2 + prim.v[i, j]^2
-        total += half * prim.rho[i, j] * vel2
+    ρ = prim.rho
+    u = prim.u
+    v = prim.v
+    nx, ny = size(ρ)
+    if ρ isa Array
+        total = zero(eltype(ρ))
+        half = convert(eltype(ρ), 0.5)
+        @inbounds for j in 1:ny, i in 1:nx
+            vel2 = u[i, j]^2 + v[i, j]^2
+            total += half * ρ[i, j] * vel2
+        end
+        return float(total) / (nx * ny), prim
+    else
+        T = eltype(ρ)
+        half = inv(convert(T, 2))
+        vel2 = u .* u .+ v .* v
+        total = sum(ρ .* vel2 .* half)
+        return float(total) / (nx * ny), prim
     end
-    return float(total) / (nx * ny), prim
 end
 
 function _write_khi_diagnostics(path::AbstractString,
@@ -165,6 +198,7 @@ function _write_khi_pdf(path::AbstractString,
                         centers_x,
                         centers_y)
     prim = primitive_variables(problem, solution(state);
+                                backend = CodexMach.backend(state),
                                 rho_out = buffers.rho,
                                 u_out = buffers.u,
                                 v_out = buffers.v,
@@ -176,9 +210,10 @@ function _write_khi_pdf(path::AbstractString,
 end
 
 function _density_plot(centers_x, centers_y, density; title::AbstractString)
+    dens = density isa Array ? density : Array(density)
     heatmap(centers_x,
             centers_y,
-            density';
+            dens';
             xlabel = "x",
             ylabel = "y",
             title = title,
