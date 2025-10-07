@@ -94,7 +94,7 @@ end
     ka_u = solution(ka_state)
     @test all(isapprox.(ka_u, serial_u; atol = 1e-10))
 
-    if :metal in available_backends()
+    if Sys.isapple() && :metal in available_backends()
         metal_state = CompressibleEulerState(prob; init = init, T = Float64,
                                              backend = KernelAbstractionsBackend(:metal))
         for _ in 1:steps
