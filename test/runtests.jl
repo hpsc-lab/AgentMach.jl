@@ -81,9 +81,12 @@ end
     @test backend(state) === ka_backend
 
     dt = 0.1
+    steps = 5
     serial_state = LinearAdvectionState(problem; init = 1.0)
-    rk2_step!(serial_state, problem, dt)
-    rk2_step!(state, problem, dt)
+    for _ in 1:steps
+        rk2_step!(serial_state, problem, dt)
+        rk2_step!(state, problem, dt)
+    end
     serial_u = scalar_component(solution(serial_state))
     ka_u = scalar_component(solution(state))
     @test all(isapprox.(ka_u, serial_u; atol = 1e-10))
