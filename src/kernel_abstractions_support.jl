@@ -6,7 +6,7 @@ function _resolve_ka_device(spec)
     if spec isa Symbol
         spec === :cpu && return KernelAbstractions.CPU()
         throw(ArgumentError("Unsupported KernelAbstractions device spec $(spec); supported values: $(_SUPPORTED_SYMBOLIC_DEVICES)"))
-    elseif KernelAbstractions.isdevice(spec)
+    elseif spec isa KernelAbstractions.AbstractDevice
         return spec
     else
         throw(ArgumentError("KernelAbstractionsBackend device must be a Symbol or device, got $(typeof(spec))"))
@@ -48,18 +48,16 @@ end
 end
 
 @kernel function _rk2_stage_kernel!(stage, u, rhs, dt)
-    i, j = @index(Global, NTuple)
-    nx, ny = size(stage)
-    if i <= nx && j <= ny
-        stage[i, j] = u[i, j] + dt * rhs[i, j]
+    I = @index(Global)
+    if I <= length(stage)
+        stage[I] = u[I] + dt * rhs[I]
     end
 end
 
 @kernel function _rk2_update_kernel!(u, k1, k2, factor)
-    i, j = @index(Global, NTuple)
-    nx, ny = size(u)
-    if i <= nx && j <= ny
-        u[i, j] = u[i, j] + factor * (k1[i, j] + k2[i, j])
+    I = @index(Global)
+    if I <= length(u)
+        u[I] = u[I] + factor * (k1[I] + k2[I])
     end
 end
 
@@ -83,7 +81,7 @@ function rk2_stage_kernel!(backend::KernelAbstractionsBackend,
     kernel = backend.workgroupsize === nothing ?
         _rk2_stage_kernel!(device) :
         _rk2_stage_kernel!(device, backend.workgroupsize)
-    kernel(stage, u, rhs, dt; ndrange = size(stage))
+    kernel(stage, u, rhs, dt; ndrange = length(stage))
     KernelAbstractions.synchronize(device)
     return stage
 end
@@ -94,7 +92,7 @@ function rk2_update_kernel!(backend::KernelAbstractionsBackend,
     kernel = backend.workgroupsize === nothing ?
         _rk2_update_kernel!(device) :
         _rk2_update_kernel!(device, backend.workgroupsize)
-    kernel(u, k1, k2, factor; ndrange = size(u))
+    kernel(u, k1, k2, factor; ndrange = length(u))
     KernelAbstractions.synchronize(device)
     return u
 end
