@@ -66,3 +66,31 @@ using CodexMach
     @test all(isapprox.(prim_buf.v, prim.v; atol = 1e-12))
     @test all(isapprox.(prim_buf.p, prim.p; atol = 1e-12))
 end
+
+@testset "Compressible Euler KA backend" begin
+    nx, ny = 16, 16
+    prob = setup_compressible_euler_problem(nx, ny;
+                                            lengths = (1.0, 1.0),
+                                            origin = (0.0, 0.0),
+                                            gamma = 1.4)
+
+    init(x, y) = (; rho = 1.0 + 0.05 * sinpi(x),
+                   v1 = 0.02 * cospi(y),
+                   v2 = 0.01 * sinpi(x + y),
+                   p = 1.0 + 0.02 * cospi(x))
+
+    serial_state = CompressibleEulerState(prob; init = init, T = Float64)
+    ka_state = CompressibleEulerState(prob; init = init, T = Float64,
+                                      backend = KernelAbstractionsBackend(:cpu))
+
+    steps = 3
+    dt = stable_timestep(prob, serial_state; cfl = 0.4)
+    for _ in 1:steps
+        rk2_step!(serial_state, prob, dt)
+        rk2_step!(ka_state, prob, dt)
+    end
+
+    serial_u = solution(serial_state)
+    ka_u = solution(ka_state)
+    @test all(isapprox.(ka_u, serial_u; atol = 1e-10))
+end

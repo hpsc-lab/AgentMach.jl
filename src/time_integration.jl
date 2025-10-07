@@ -231,7 +231,7 @@ function rk2_step!(state::CompressibleEulerState,
     if backend_obj isa SerialBackend
         return _rk2_step_serial!(state, problem, dt)
     elseif backend_obj isa KernelAbstractionsBackend
-        throw(ArgumentError("KernelAbstractions backends are not yet implemented for compressible Euler"))
+        return _rk2_step_euler_ka!(state, problem, dt, backend_obj)
     else
         throw(ArgumentError("Unsupported execution backend $(describe(backend_obj)) for compressible Euler"))
     end
@@ -312,6 +312,44 @@ function _rk2_step_linear_advection_ka!(state::LinearAdvectionState,
         end
         @timeit timer "Solution update" begin
             rk2_update_kernel!(backend_obj, u, k1, k2, dtT * half)
+        end
+    end
+
+    return state
+end
+
+function _rk2_step_euler_ka!(state::CompressibleEulerState,
+                             problem::CompressibleEulerProblem,
+                             dt::Real,
+                             backend_obj::KernelAbstractionsBackend)
+    u_field = solution(state)
+    ws = workspace(state)
+    Tsol = eltype(u_field)
+    dtT = convert(Tsol, dt)
+    half = convert(Tsol, 0.5)
+
+    timer = simulation_timers()
+
+    @timeit timer "RK2 step" begin
+        @timeit timer "RHS compute" compute_rhs!(ws.k1, u_field, problem)
+        @timeit timer "Stage predictor" begin
+            for comp in 1:ncomponents(u_field)
+                rk2_stage_kernel!(backend_obj,
+                                  component(ws.stage, comp),
+                                  component(u_field, comp),
+                                  component(ws.k1, comp),
+                                  dtT)
+            end
+        end
+        @timeit timer "RHS compute" compute_rhs!(ws.k2, ws.stage, problem)
+        @timeit timer "Solution update" begin
+            for comp in 1:ncomponents(u_field)
+                rk2_update_kernel!(backend_obj,
+                                   component(u_field, comp),
+                                   component(ws.k1, comp),
+                                   component(ws.k2, comp),
+                                   dtT * half)
+            end
         end
     end
 
