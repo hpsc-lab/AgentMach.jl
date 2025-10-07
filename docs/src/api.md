@@ -48,6 +48,7 @@ CompressibleEulerProblem
 setup_compressible_euler_problem
 CompressibleEulerState
 primitive_variables
+_primitive_variables_cpu
 ```
 
 ## Time Integration
