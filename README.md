@@ -122,6 +122,13 @@ It benchmarks the RK2 loops for linear advection and compressible Euler across
 the serial and any registered KernelAbstractions backends (CPU, Metal, CUDA),
 forcing `Float32` to keep Metal hardware supported.
 
+## Development challenges
+
+- Adding packages with incorrect UUIDs cropped up often; fixing the registry mismatches slowed down iteration and required manual cleanup of `Project.toml`/`Manifest.toml`.
+- macOS sandboxing kept blocking command execution, so routine actions like `Pkg.instantiate` or simple shell checks needed elevated approvals or alternative workflows.
+- Extending or refactoring features routinely broke untested paths (especially mixed CPU/GPU modes), revealing how thin our regression suite still is.
+- The implementation leans verbose so that backend-specific branches stay explicit, but that also makes large refactors risky and time-consuming.
+
 ## Maintainer
 
 CodexMach.jl is maintained by Michael Schlottke-Lakemper
