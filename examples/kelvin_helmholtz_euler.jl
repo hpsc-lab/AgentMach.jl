@@ -5,7 +5,7 @@ using Plots
 
 """
     run_kelvin_helmholtz(; nx=256, ny=256, gamma=1.4, final_time=1.5,
-                           cfl=0.45, T=Float32, log_every=25,
+                           cfl=0.45, T=Float32, backend=default_backend(), log_every=25,
                            diagnostics_path=nothing,
                            pdf_path=nothing,
                            animation_path=nothing,
@@ -22,7 +22,8 @@ function run_kelvin_helmholtz(; nx::Int = 256,
                                gamma::Real = 1.4,
                                final_time::Real = 1.5,
                                cfl::Real = 0.45,
-                               T::Type = Float32,
+                               T::Union{Type,Nothing} = Float32,
+                               backend::Union{ExecutionBackend,Symbol} = default_backend(),
                                log_every::Integer = 25,
                                diagnostics_path::Union{Nothing,AbstractString} = nothing,
                                pdf_path::Union{Nothing,AbstractString} = nothing,
@@ -42,8 +43,11 @@ function run_kelvin_helmholtz(; nx::Int = 256,
                                                gamma = gamma,
                                                boundary_conditions = PeriodicBoundaryConditions())
 
-    init = _kelvin_helmholtz_initializer(T)
-    state = CompressibleEulerState(problem; T = T, init = init)
+    backend_obj = _resolve_example_backend(backend)
+    state_T = isnothing(T) ? _default_state_eltype(backend_obj) : T
+
+    init = _kelvin_helmholtz_initializer(state_T)
+    state = CompressibleEulerState(problem; T = state_T, init = init, backend = backend_obj)
 
     sim_time = 0.0
     step = 0
@@ -110,6 +114,22 @@ function run_kelvin_helmholtz(; nx::Int = 256,
             diagnostics = records,
             pdf_path = pdf_path,
             animation_path = animation_path)
+end
+
+function _resolve_example_backend(spec::ExecutionBackend)
+    return spec
+end
+
+function _resolve_example_backend(spec::Symbol)
+    return KernelAbstractionsBackend(spec)
+end
+
+function _default_state_eltype(::ExecutionBackend)
+    return Float64
+end
+
+function _default_state_eltype(::KernelAbstractionsBackend)
+    return Float32
 end
 
 function _kelvin_helmholtz_initializer(::Type{T}) where {T}

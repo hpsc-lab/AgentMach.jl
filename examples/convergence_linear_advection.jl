@@ -5,7 +5,8 @@ using Printf
 """
     run_convergence_study(; base_resolution=(16, 16), levels=5,
                              lengths=(1.0, 1.0), velocity=(1.0, 0.5),
-                             final_time=0.5, cfl=0.45)
+                             final_time=0.5, cfl=0.45,
+                             backend=default_backend(), state_eltype=nothing)
 
 Execute a grid refinement study for periodic linear advection with a sinusoidal
 initial condition on a square domain. Prints the L₂ error for each resolution,
@@ -16,7 +17,9 @@ function run_convergence_study(; base_resolution::Tuple{Int,Int} = (16, 16),
                                 lengths::Tuple{<:Real,<:Real} = (1.0, 1.0),
                                 velocity::Tuple{<:Real,<:Real} = (1.0, 0.5),
                                 final_time::Real = 0.5,
-                                cfl::Real = 0.45)
+                                cfl::Real = 0.45,
+                                backend::Union{ExecutionBackend,Symbol} = default_backend(),
+                                state_eltype::Union{Nothing,Type} = nothing)
     @assert levels >= 2 "Need at least two levels to measure convergence"
 
     Lx, Ly = float(lengths[1]), float(lengths[2])
@@ -31,6 +34,8 @@ function run_convergence_study(; base_resolution::Tuple{Int,Int} = (16, 16),
     println(" level    nx    ny        dt          L2 error        EOC")
 
     init = _sinusoidal_initializer(Lx, Ly)
+    backend_obj = _resolve_example_backend(backend)
+    state_T = isnothing(state_eltype) ? _default_state_eltype(backend_obj) : state_eltype
 
     for level in 0:levels-1
         nx = nx0 * 2^level
@@ -38,7 +43,7 @@ function run_convergence_study(; base_resolution::Tuple{Int,Int} = (16, 16),
         problem = setup_linear_advection_problem(nx, ny;
                                                  lengths = (Lx, Ly),
                                                  velocity = vel)
-        state = LinearAdvectionState(problem; init = init)
+        state = LinearAdvectionState(problem; init = init, T = state_T, backend = backend_obj)
 
         dt_stable = stable_timestep(problem; cfl = cfl)
         steps = max(1, ceil(Int, final_time / dt_stable))
@@ -73,6 +78,22 @@ function run_convergence_study(; base_resolution::Tuple{Int,Int} = (16, 16),
     return (; lengths = (Lx, Ly), velocity = vel, final_time = final_time,
             resolutions = [(nx0 * 2^lvl, ny0 * 2^lvl) for lvl in 0:levels-1],
             errors = errors, eocs = eocs)
+end
+
+function _resolve_example_backend(spec::ExecutionBackend)
+    return spec
+end
+
+function _resolve_example_backend(spec::Symbol)
+    return KernelAbstractionsBackend(spec)
+end
+
+function _default_state_eltype(::ExecutionBackend)
+    return Float64
+end
+
+function _default_state_eltype(::KernelAbstractionsBackend)
+    return Float32
 end
 
 function _sinusoidal_initializer(Lx::Float64, Ly::Float64)

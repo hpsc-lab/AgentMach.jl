@@ -4,6 +4,7 @@ using CodexMach
 """
     run_linear_advection_demo(; nx=256, ny=128, lengths=(2.0, 1.0),
                                velocity=(1.0, 0.0), cfl=0.4, steps=100,
+                               backend=default_backend(), state_eltype=nothing,
                                sample_every=nothing,
                                diagnostics_path=nothing, state_path=nothing,
                                match_return_period=true)
@@ -22,6 +23,8 @@ function run_linear_advection_demo(; nx::Int = 256,
                                     velocity::Tuple{<:Real,<:Real} = (1.0, 0.0),
                                     cfl::Real = 0.4,
                                     steps::Int = 100,
+                                    backend::Union{ExecutionBackend,Symbol} = default_backend(),
+                                    state_eltype::Union{Nothing,Type} = nothing,
                                     sample_every::Union{Nothing,Int} = nothing,
                                     diagnostics_path::Union{Nothing,AbstractString} = nothing,
                                     state_path::Union{Nothing,AbstractString} = nothing,
@@ -37,8 +40,14 @@ function run_linear_advection_demo(; nx::Int = 256,
     problem = setup_linear_advection_problem(nx_cells, ny_cells;
                                              velocity = velocity,
                                              lengths = lengths_tuple)
+    backend_obj = _resolve_example_backend(backend)
+    Tstate = isnothing(state_eltype) ? _default_state_eltype(backend_obj) : state_eltype
+
     init_field = _sine_blob_initializer(lengths_tuple)
-    state = LinearAdvectionState(problem; init = init_field)
+    state = LinearAdvectionState(problem;
+                                 init = init_field,
+                                 T = Tstate,
+                                 backend = backend_obj)
 
     dt_cfl = stable_timestep(problem; cfl = cfl)
     target_time = _return_period(lengths_tuple, velocity)
@@ -90,6 +99,22 @@ function run_linear_advection_demo(; nx::Int = 256,
                             nx = nx_cells,
                             ny = ny_cells,
                             target_time = target_time))
+end
+
+function _resolve_example_backend(spec::ExecutionBackend)
+    return spec
+end
+
+function _resolve_example_backend(spec::Symbol)
+    return KernelAbstractionsBackend(spec)
+end
+
+function _default_state_eltype(::ExecutionBackend)
+    return Float64
+end
+
+function _default_state_eltype(::KernelAbstractionsBackend)
+    return Float32
 end
 
 function _write_diagnostics_csv(path::AbstractString,
