@@ -114,7 +114,7 @@ function _initialize_scalar_field!(field::CellField, init, mesh::StructuredMesh,
             @inbounds for j in 1:ny, i in 1:nx
                 host[i, j] = T(init(centers_x[i], centers_y[j]))
             end
-            data .= host
+            copyto!(data, host)
         end
     else
         throw(ArgumentError("Unsupported initializer type $(typeof(init))"))

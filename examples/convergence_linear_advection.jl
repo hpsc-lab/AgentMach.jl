@@ -52,7 +52,8 @@ function run_convergence_study(; base_resolution::Tuple{Int,Int} = (16, 16),
         run_linear_advection!(state, problem; steps = steps, dt = dt)
 
         u_field = solution(state)
-        u_num = scalar_component(u_field)
+        u_num_backend = scalar_component(u_field)
+        u_num = Array(u_num_backend)  # copy to host for error evaluation
         u_exact = _exact_solution(problem, vel, final_time, u_num)
 
         err = sqrt(sum(abs2, u_num .- u_exact) / length(u_num))
