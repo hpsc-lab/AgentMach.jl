@@ -75,11 +75,18 @@ end
 end
 
 @testset "Backends" begin
-    problem = setup_linear_advection_problem(8, 4; velocity = (0.0, 0.0))
+    problem = setup_linear_advection_problem(8, 4; velocity = (0.5, 0.0))
     ka_backend = KernelAbstractionsBackend(:cpu)
     state = LinearAdvectionState(problem; init = 1.0, backend = ka_backend)
     @test backend(state) === ka_backend
-    @test_throws ArgumentError run_linear_advection!(state, problem; steps = 1, dt = 0.1)
+
+    dt = 0.1
+    serial_state = LinearAdvectionState(problem; init = 1.0)
+    rk2_step!(serial_state, problem, dt)
+    rk2_step!(state, problem, dt)
+    serial_u = scalar_component(solution(serial_state))
+    ka_u = scalar_component(solution(state))
+    @test all(isapprox.(ka_u, serial_u; atol = 1e-10))
 end
 
 @testset "LinearAdvection RK2" begin

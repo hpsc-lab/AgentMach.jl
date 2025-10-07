@@ -214,23 +214,26 @@ Runge-Kutta step of size `dt`.
 function rk2_step!(state::LinearAdvectionState,
                    problem::LinearAdvectionProblem,
                    dt::Real)
-    return _rk2_step!(state, problem, dt)
+    backend_obj = backend(state)
+    if backend_obj isa SerialBackend
+        return _rk2_step_serial!(state, problem, dt)
+    elseif backend_obj isa KernelAbstractionsBackend
+        return _rk2_step_linear_advection_ka!(state, problem, dt, backend_obj)
+    else
+        throw(ArgumentError("Unsupported execution backend $(describe(backend_obj)) for linear advection"))
+    end
 end
 
 function rk2_step!(state::CompressibleEulerState,
                    problem::CompressibleEulerProblem,
                    dt::Real)
-    return _rk2_step!(state, problem, dt)
-end
-
-function _rk2_step!(state, problem, dt::Real)
     backend_obj = backend(state)
     if backend_obj isa SerialBackend
         return _rk2_step_serial!(state, problem, dt)
     elseif backend_obj isa KernelAbstractionsBackend
-        throw(ArgumentError("KernelAbstractions backends are not yet implemented for time integration"))
+        throw(ArgumentError("KernelAbstractions backends are not yet implemented for compressible Euler"))
     else
-        throw(ArgumentError("Unsupported execution backend $(describe(backend_obj))"))
+        throw(ArgumentError("Unsupported execution backend $(describe(backend_obj)) for compressible Euler"))
     end
 end
 
@@ -247,6 +250,69 @@ function _rk2_step_serial!(state, problem, dt::Real)
         @timeit timer "Stage predictor" _rk2_stage_predict!(ws.stage, u, ws.k1, dtT)
         @timeit timer "RHS compute" compute_rhs!(ws.k2, ws.stage, problem)
         @timeit timer "Solution update" _rk2_solution_update!(u, ws.k1, ws.k2, dtT * half)
+    end
+
+    return state
+end
+
+function _rk2_step_linear_advection_ka!(state::LinearAdvectionState,
+                                        problem::LinearAdvectionProblem,
+                                        dt::Real,
+                                        backend_obj::KernelAbstractionsBackend)
+    u_field = solution(state)
+    ws = workspace(state)
+    mesh_obj = mesh(problem)
+    dims = size(mesh_obj)
+    nx, ny = dims
+
+    u = scalar_component(u_field)
+    k1 = scalar_component(ws.k1)
+    k2 = scalar_component(ws.k2)
+    stage = scalar_component(ws.stage)
+
+    Tsol = eltype(u)
+    dtT = convert(Tsol, dt)
+    half = convert(Tsol, 0.5)
+
+    eq = pde(problem)
+    bc = boundary_conditions(problem)
+    axes = periodic_axes(bc)
+    vel = velocity(eq)
+    ax_raw, ay_raw = vel
+    ax = convert(Tsol, ax_raw)
+    ay = convert(Tsol, ay_raw)
+    dx, dy = spacing(mesh_obj)
+    inv2dx = ax == zero(ax) ? zero(Tsol) : Tsol(1) / (Tsol(2) * Tsol(dx))
+    inv2dy = ay == zero(ay) ? zero(Tsol) : Tsol(1) / (Tsol(2) * Tsol(dy))
+
+    if ax != zero(ax) && !axes[1]
+        throw(ArgumentError("Periodic boundary conditions required along x for advection"))
+    end
+    if ay != zero(ay) && !axes[2]
+        throw(ArgumentError("Periodic boundary conditions required along y for advection"))
+    end
+    if ax != zero(ax) && nx < 3
+        throw(ArgumentError("At least three cells along x are required for 2nd-order advection"))
+    end
+    if ay != zero(ay) && ny < 3
+        throw(ArgumentError("At least three cells along y are required for 2nd-order advection"))
+    end
+
+    timer = simulation_timers()
+
+    @timeit timer "RK2 step" begin
+        @timeit timer "RHS compute" begin
+            linear_advection_rhs_kernel!(backend_obj, k1, u, nx, ny, ax, ay, inv2dx, inv2dy)
+        end
+        @timeit timer "Stage predictor" begin
+            rk2_stage_kernel!(backend_obj, stage, u, k1, dtT)
+        end
+        @timeit timer "RHS compute" begin
+            linear_advection_rhs_kernel!(backend_obj, k2, stage, nx, ny, ax, ay, inv2dx, inv2dy)
+        end
+        @timeit timer "Solution update" begin
+            rk2_update_kernel!(backend_obj, u, k1, k2, dtT * half)
+        end
     end
 
     return state
