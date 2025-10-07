@@ -53,7 +53,8 @@ function run_kelvin_helmholtz(; nx::Int = 256,
     step = 0
     last_cfl = NaN
     records = diagnostics_path === nothing ? nothing : Vector{NamedTuple{(:step, :time, :cfl, :kinetic_energy),NTuple{4,Float64}}}()
-    prim_buffers = primitive_variables(problem, solution(state))
+    prim_buffers = primitive_variables(problem, solution(state);
+                                       backend = CodexMach.backend(state))
     last_progress = time()
     centers_x, centers_y = cell_centers(mesh(problem))
     animation_obj = animation_path === nothing ? nothing : Animation()
@@ -152,19 +153,31 @@ function _volume_average_kinetic_energy(state::CompressibleEulerState,
                                         problem::CompressibleEulerProblem,
                                         buffers)
     prim = primitive_variables(problem, solution(state);
+                                backend = CodexMach.backend(state),
                                 rho_out = buffers.rho,
                                 u_out = buffers.u,
                                 v_out = buffers.v,
                                 p_out = buffers.p)
 
-    nx, ny = size(prim.rho)
-    total = zero(eltype(prim.rho))
-    half = convert(eltype(prim.rho), 0.5)
-    @inbounds for j in 1:ny, i in 1:nx
-        vel2 = prim.u[i, j]^2 + prim.v[i, j]^2
-        total += half * prim.rho[i, j] * vel2
+    ρ = prim.rho
+    u = prim.u
+    v = prim.v
+    nx, ny = size(ρ)
+    if ρ isa Array
+        total = zero(eltype(ρ))
+        half = convert(eltype(ρ), 0.5)
+        @inbounds for j in 1:ny, i in 1:nx
+            vel2 = u[i, j]^2 + v[i, j]^2
+            total += half * ρ[i, j] * vel2
+        end
+        return float(total) / (nx * ny), prim
+    else
+        T = eltype(ρ)
+        half = inv(convert(T, 2))
+        vel2 = u .* u .+ v .* v
+        total = sum(ρ .* vel2 .* half)
+        return float(total) / (nx * ny), prim
     end
-    return float(total) / (nx * ny), prim
 end
 
 function _write_khi_diagnostics(path::AbstractString,
@@ -185,6 +198,7 @@ function _write_khi_pdf(path::AbstractString,
                         centers_x,
                         centers_y)
     prim = primitive_variables(problem, solution(state);
+                                backend = CodexMach.backend(state),
                                 rho_out = buffers.rho,
                                 u_out = buffers.u,
                                 v_out = buffers.v,
@@ -196,9 +210,10 @@ function _write_khi_pdf(path::AbstractString,
 end
 
 function _density_plot(centers_x, centers_y, density; title::AbstractString)
+    dens = density isa Array ? density : Array(density)
     heatmap(centers_x,
             centers_y,
-            density';
+            dens';
             xlabel = "x",
             ylabel = "y",
             title = title,

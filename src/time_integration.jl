@@ -749,31 +749,8 @@ function cfl_number(problem::CompressibleEulerProblem,
     mesh_obj = mesh(problem)
     dx, dy = spacing(mesh_obj)
     γ = gamma(pde(problem))
-    u = solution(state)
-    nx, ny = size(mesh_obj)
-
-    max_ax = zero(eltype(u))
-    max_ay = zero(eltype(u))
-
-    ρ = component(u, 1)
-    rhou = component(u, 2)
-    rhov = component(u, 3)
-    E = component(u, 4)
-
-    @inbounds for j in 1:ny, i in 1:nx
-        ρval = ρ[i, j]
-        rhouval = rhou[i, j]
-        rhovval = rhov[i, j]
-        Eval = E[i, j]
-        invρ = one(ρval) / ρval
-        ux = rhouval * invρ
-        uy = rhovval * invρ
-        kinetic = 0.5 * ρval * (ux^2 + uy^2)
-        p = (γ - one(γ)) * (Eval - kinetic)
-        c = sqrt(abs(γ * p * invρ))
-        max_ax = max(max_ax, abs(ux) + c)
-        max_ay = max(max_ay, abs(uy) + c)
-    end
+    backend_obj = backend(state)
+    max_ax, max_ay = _euler_characteristics(solution(state), γ, backend_obj)
 
     dtT = float(dt)
     return dtT * (max_ax / dx + max_ay / dy)
@@ -790,12 +767,49 @@ function stable_timestep(problem::CompressibleEulerProblem,
                          cfl::Real = 0.45)
     cfl > 0 || throw(ArgumentError("CFL target must be positive"))
 
+    backend_obj = backend(state)
+    if backend_obj isa KernelAbstractionsBackend
+        return _stable_timestep_gpu(problem, state, cfl, backend_obj)
+    else
+        return _stable_timestep_cpu(problem, state, cfl)
+    end
+end
+
+function _stable_timestep_cpu(problem::CompressibleEulerProblem,
+                              state::CompressibleEulerState,
+                              cfl::Real)
     mesh_obj = mesh(problem)
     dx, dy = spacing(mesh_obj)
     γ = gamma(pde(problem))
-    u = solution(state)
-    nx, ny = size(mesh_obj)
+    max_ax, max_ay = _euler_characteristics(solution(state), γ, SerialBackend())
 
+    denom = (max_ax == 0 ? zero(Float64) : max_ax / dx) +
+            (max_ay == 0 ? zero(Float64) : max_ay / dy)
+
+    iszero(denom) && return Inf
+
+    return float(cfl) / denom
+end
+
+function _stable_timestep_gpu(problem::CompressibleEulerProblem,
+                              state::CompressibleEulerState,
+                              cfl::Real,
+                              backend_obj::KernelAbstractionsBackend)
+    mesh_obj = mesh(problem)
+    dx, dy = spacing(mesh_obj)
+    γ = gamma(pde(problem))
+    max_ax, max_ay = _euler_characteristics(solution(state), γ, backend_obj)
+
+    denom = (max_ax == 0 ? zero(Float64) : max_ax / dx) +
+            (max_ay == 0 ? zero(Float64) : max_ay / dy)
+
+    iszero(denom) && return Inf
+
+    return float(cfl) / denom
+end
+
+function _euler_characteristics(u, γ, ::ExecutionBackend)
+    nx, ny = size(component(u, 1))
     max_ax = zero(eltype(u))
     max_ay = zero(eltype(u))
 
@@ -819,12 +833,31 @@ function stable_timestep(problem::CompressibleEulerProblem,
         max_ay = max(max_ay, abs(uy) + c)
     end
 
-    denom = (max_ax == 0 ? zero(Float64) : max_ax / dx) +
-            (max_ay == 0 ? zero(Float64) : max_ay / dy)
+    return float(max_ax), float(max_ay)
+end
 
-    iszero(denom) && return Inf
+function _euler_characteristics(u, γ, backend::KernelAbstractionsBackend)
+    ρ = component(u, 1)
+    rhou = component(u, 2)
+    rhov = component(u, 3)
+    E = component(u, 4)
 
-    return float(cfl) / denom
+    T = eltype(ρ)
+    γT = convert(T, γ)
+    half = inv(convert(T, 2))
+    epsT = eps(T)
+
+    ux = rhou ./ ρ
+    uy = rhov ./ ρ
+    vel2 = ux .* ux .+ uy .* uy
+    kinetic = half .* ρ .* vel2
+    internal = max.(E .- kinetic, epsT)
+    p = max.((γT - one(γT)) .* internal, epsT)
+    c = sqrt.(abs.(γT .* p ./ ρ))
+
+    max_ax = float(maximum(abs.(ux) .+ c))
+    max_ay = float(maximum(abs.(uy) .+ c))
+    return max_ax, max_ay
 end
 
 # Utility micro-kernels for Euler RHS

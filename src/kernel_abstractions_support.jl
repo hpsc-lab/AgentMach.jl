@@ -143,6 +143,31 @@ end
     end
 end
 
+@kernel function _primitive_variables_kernel!(ρ_out, u_out, v_out, p_out,
+                                              ρc, rhouc, rhovc, Ec,
+                                              γm1, epsT)
+    i, j = @index(Global, NTuple)
+    nx, ny = size(ρc)
+    if i <= nx && j <= ny
+        ρval = ρc[i, j]
+        ρval = ρval < epsT ? epsT : ρval
+        invρ = one(ρval) / ρval
+        ux = rhouc[i, j] * invρ
+        uy = rhovc[i, j] * invρ
+        half = inv(convert(typeof(ρval), 2))
+        kinetic = half * ρval * (ux^2 + uy^2)
+        internal = Ec[i, j] - kinetic
+        internal = internal < epsT ? epsT : internal
+        p = γm1 * internal
+        p = p < epsT ? epsT : p
+
+        ρ_out[i, j] = ρval
+        u_out[i, j] = ux
+        v_out[i, j] = uy
+        p_out[i, j] = p
+    end
+end
+
 function linear_advection_rhs_kernel!(backend::KernelAbstractionsBackend,
                                       du, u,
                                       nx::Int, ny::Int,
@@ -177,6 +202,21 @@ function rk2_update_kernel!(backend::KernelAbstractionsBackend,
     kernel(u, k1, k2, factor; ndrange = length(u))
     KernelAbstractions.synchronize(device)
     return u
+end
+
+function primitive_variables_kernel!(backend::KernelAbstractionsBackend,
+                                     ρ_out, u_out, v_out, p_out,
+                                     ρc, rhouc, rhovc, Ec,
+                                     γm1, epsT)
+    device = _resolve_ka_device(backend.device)
+    kernel = backend.workgroupsize === nothing ?
+        _primitive_variables_kernel!(device) :
+        _primitive_variables_kernel!(device, backend.workgroupsize)
+    kernel(ρ_out, u_out, v_out, p_out,
+           ρc, rhouc, rhovc, Ec,
+           γm1, epsT; ndrange = size(ρc))
+    KernelAbstractions.synchronize(device)
+    return ρ_out, u_out, v_out, p_out
 end
 
 @kernel function _compressible_euler_rhs_kernel!(dρ, drhou, drhov, dE,

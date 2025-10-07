@@ -62,6 +62,20 @@ stable_timestep
 cfl_number
 ```
 
+## Cell Fields
+
+```@docs
+CellField
+allocate_cellfield
+allocate_like
+map_components!
+cell_components
+component
+ncomponents
+spatial_size
+backend
+```
+
 ## Simulation Drivers
 
 ```@docs

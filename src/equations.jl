@@ -201,53 +201,26 @@ Convert a conserved-field array with layout `(4, nx, ny)` to primitive
 variables. Optionally provide preallocated output arrays via the keyword
 arguments. Returns a named tuple `(rho, u, v, p)`.
 """
-function primitive_variables(eq::CompressibleEuler,
-                             conserved::AbstractArray{T,3};
-                             rho_out = nothing,
-                             u_out = nothing,
-                             v_out = nothing,
-                             p_out = nothing) where {T}
-    size(conserved, 1) == 4 ||
-        throw(ArgumentError("Conserved field must have first dimension of length 4"))
-
-    nx, ny = size(conserved, 2), size(conserved, 3)
-
-    ρ = rho_out === nothing ? Array{float(T)}(undef, nx, ny) : rho_out
-    u = u_out === nothing ? similar(ρ) : u_out
-    v = v_out === nothing ? similar(ρ) : v_out
-    p = p_out === nothing ? similar(ρ) : p_out
-
-    @inbounds for j in 1:ny, i in 1:nx
-        prim = primitive_variables(eq,
-                                   conserved[1, i, j],
-                                   conserved[2, i, j],
-                                   conserved[3, i, j],
-                                   conserved[4, i, j])
-        ρ[i, j] = prim.ρ
-        u[i, j] = prim.u
-        v[i, j] = prim.v
-        p[i, j] = prim.p
-    end
-
-    return (; rho = ρ, u = u, v = v, p = p)
-end
-
-function primitive_variables(eq::CompressibleEuler,
-                             conserved::CellField;
-                             rho_out = nothing,
-                             u_out = nothing,
-                             v_out = nothing,
-                             p_out = nothing)
-    size(conserved, 1) == 4 ||
-        throw(ArgumentError("Conserved field must have first dimension of length 4"))
-
+function _primitive_variables_cpu(eq::CompressibleEuler,
+                                  conserved::CellField;
+                                  rho_out = nothing,
+                                  u_out = nothing,
+                                  v_out = nothing,
+                                  p_out = nothing)
     nx, ny = spatial_size(conserved)
 
     T = component_eltype(conserved)
-    ρ = rho_out === nothing ? Array{float(T)}(undef, nx, ny) : rho_out
+    out_T = float(T)
+
+    ρ = rho_out === nothing ? Array{out_T}(undef, nx, ny) : rho_out
     u = u_out === nothing ? similar(ρ) : u_out
     v = v_out === nothing ? similar(ρ) : v_out
     p = p_out === nothing ? similar(ρ) : p_out
+
+    size(ρ) == (nx, ny) ||
+        throw(ArgumentError("rho_out size mismatch"))
+    (size(u) == (nx, ny) && size(v) == (nx, ny) && size(p) == (nx, ny)) ||
+        throw(ArgumentError("Primitive output buffers must match conserved field shape"))
 
     ρc = component(conserved, 1)
     rhouc = component(conserved, 2)
@@ -269,14 +242,137 @@ function primitive_variables(eq::CompressibleEuler,
     return (; rho = ρ, u = u, v = v, p = p)
 end
 
-primitive_variables(problem::CompressibleEulerProblem,
-                    state; kwargs...) =
-    primitive_variables(pde(problem), solution(state); kwargs...)
+function _primitive_variables_cpu(eq::CompressibleEuler,
+                                  conserved::AbstractArray{T,3};
+                                  rho_out = nothing,
+                                  u_out = nothing,
+                                  v_out = nothing,
+                                  p_out = nothing) where {T}
+    size(conserved, 1) == 4 ||
+        throw(ArgumentError("Conserved field must have first dimension of length 4"))
+
+    nx, ny = size(conserved, 2), size(conserved, 3)
+    out_T = float(T)
+
+    ρ = rho_out === nothing ? Array{out_T}(undef, nx, ny) : rho_out
+    u = u_out === nothing ? similar(ρ) : u_out
+    v = v_out === nothing ? similar(ρ) : v_out
+    p = p_out === nothing ? similar(ρ) : p_out
+
+    size(ρ) == (nx, ny) ||
+        throw(ArgumentError("rho_out size mismatch"))
+    (size(u) == (nx, ny) && size(v) == (nx, ny) && size(p) == (nx, ny)) ||
+        throw(ArgumentError("Primitive output buffers must match conserved field shape"))
+
+    @inbounds for j in 1:ny, i in 1:nx
+        prim = primitive_variables(eq,
+                                   conserved[1, i, j],
+                                   conserved[2, i, j],
+                                   conserved[3, i, j],
+                                   conserved[4, i, j])
+        ρ[i, j] = prim.ρ
+        u[i, j] = prim.u
+        v[i, j] = prim.v
+        p[i, j] = prim.p
+    end
+
+    return (; rho = ρ, u = u, v = v, p = p)
+end
+
+function _primitive_variables_gpu(eq::CompressibleEuler,
+                                  conserved::CellField,
+                                  backend::KernelAbstractionsBackend;
+                                  rho_out = nothing,
+                                  u_out = nothing,
+                                  v_out = nothing,
+                                  p_out = nothing)
+    size(conserved, 1) == 4 ||
+        throw(ArgumentError("Conserved field must have first dimension of length 4"))
+
+    ρc = component(conserved, 1)
+    rhouc = component(conserved, 2)
+    rhovc = component(conserved, 3)
+    Ec = component(conserved, 4)
+
+    ρ = rho_out === nothing ? similar(ρc) : rho_out
+    u = u_out === nothing ? similar(ρc) : u_out
+    v = v_out === nothing ? similar(ρc) : v_out
+    p = p_out === nothing ? similar(ρc) : p_out
+
+    size(ρ) == size(ρc) ||
+        throw(ArgumentError("rho_out size mismatch"))
+    (size(u) == size(ρc) && size(v) == size(ρc) && size(p) == size(ρc)) ||
+        throw(ArgumentError("Primitive output buffers must match conserved field shape"))
+
+    T = eltype(ρc)
+    γT = convert(T, gamma(eq))
+    γm1 = γT - one(γT)
+    epsT = eps(T)
+
+    primitive_variables_kernel!(backend,
+                                ρ, u, v, p,
+                                ρc, rhouc, rhovc, Ec,
+                                γm1, epsT)
+
+    return (; rho = ρ, u = u, v = v, p = p)
+end
+
+function primitive_variables(eq::CompressibleEuler,
+                             conserved::CellField;
+                             backend::ExecutionBackend = SerialBackend(),
+                             rho_out = nothing,
+                             u_out = nothing,
+                             v_out = nothing,
+                             p_out = nothing)
+    if backend isa KernelAbstractionsBackend
+        return _primitive_variables_gpu(eq, conserved, backend;
+                                        rho_out = rho_out,
+                                        u_out = u_out,
+                                        v_out = v_out,
+                                        p_out = p_out)
+    else
+        return _primitive_variables_cpu(eq, conserved;
+                                        rho_out = rho_out,
+                                        u_out = u_out,
+                                        v_out = v_out,
+                                        p_out = p_out)
+    end
+end
+
+function primitive_variables(eq::CompressibleEuler,
+                             conserved::AbstractArray{T,3};
+                             backend::ExecutionBackend = SerialBackend(),
+                             rho_out = nothing,
+                             u_out = nothing,
+                             v_out = nothing,
+                             p_out = nothing) where {T}
+    backend isa KernelAbstractionsBackend &&
+        throw(ArgumentError("primitive_variables does not support generic AbstractArray inputs on GPU"))
+    return _primitive_variables_cpu(eq, conserved;
+                                     rho_out = rho_out,
+                                     u_out = u_out,
+                                     v_out = v_out,
+                                     p_out = p_out)
+end
 
 primitive_variables(problem::CompressibleEulerProblem,
-                    conserved::AbstractArray{T,3}; kwargs...) where {T} =
-    primitive_variables(pde(problem), conserved; kwargs...)
+                    state;
+                    backend::ExecutionBackend = backend(state), kwargs...) =
+    primitive_variables(pde(problem),
+                        solution(state);
+                        backend = backend,
+                        kwargs...)
 
 primitive_variables(problem::CompressibleEulerProblem,
-                    conserved::CellField; kwargs...) =
-    primitive_variables(pde(problem), conserved; kwargs...)
+                    conserved::AbstractArray{T,3};
+                    backend::ExecutionBackend = SerialBackend(), kwargs...) where {T} =
+    primitive_variables(pde(problem), conserved;
+                        backend = backend,
+                        kwargs...)
+
+primitive_variables(problem::CompressibleEulerProblem,
+                    conserved::CellField;
+                    backend::ExecutionBackend = SerialBackend(), kwargs...) =
+    primitive_variables(pde(problem), conserved;
+                        backend = backend,
+                        kwargs...)
