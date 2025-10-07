@@ -22,3 +22,19 @@ function describe(backend::ExecutionBackend)
     backend isa KernelAbstractionsBackend && return "KernelAbstractionsBackend($(backend.device))"
     return string(typeof(backend))
 end
+
+function default_array_type(::SerialBackend)
+    return Array
+end
+
+function default_array_type(backend::KernelAbstractionsBackend)
+    return _default_array_type_from_spec(backend.device)
+end
+
+_default_array_type_from_spec(::Any) = Array
+
+function _default_array_type_from_spec(spec::Symbol)
+    return _default_array_type_from_symbol(Val(spec))
+end
+
+_default_array_type_from_symbol(::Val) = Array

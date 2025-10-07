@@ -71,16 +71,15 @@ workspace(state::CompressibleEulerState) = state.workspace
 
 backend(state::CompressibleEulerState) = state.backend
 
-const _DefaultArrayType = Array
-
 function LinearAdvectionState(problem::LinearAdvectionProblem;
                               T::Type = Float64,
-                              array_type = _DefaultArrayType,
+                              array_type = nothing,
                               init = nothing,
                               backend::ExecutionBackend = default_backend())
     mesh_obj = mesh(problem)
     dims = size(mesh_obj)
-    field = allocate_cellfield(array_type, T, dims, 1)
+    array_type_val = array_type === nothing ? default_array_type(backend) : array_type
+    field = allocate_cellfield(array_type_val, T, dims, 1)
     _initialize_scalar_field!(field, init, mesh_obj, T)
 
     k1 = allocate_like(field)
@@ -106,8 +105,16 @@ function _initialize_scalar_field!(field::CellField, init, mesh::StructuredMesh,
     elseif init isa Function
         centers_x, centers_y = cell_centers(mesh)
         nx, ny = size(mesh)
-        @inbounds for j in 1:ny, i in 1:nx
-            data[i, j] = T(init(centers_x[i], centers_y[j]))
+        if data isa Array
+            @inbounds for j in 1:ny, i in 1:nx
+                data[i, j] = T(init(centers_x[i], centers_y[j]))
+            end
+        else
+            host = Array{T}(undef, nx, ny)
+            @inbounds for j in 1:ny, i in 1:nx
+                host[i, j] = T(init(centers_x[i], centers_y[j]))
+            end
+            data .= host
         end
     else
         throw(ArgumentError("Unsupported initializer type $(typeof(init))"))
@@ -119,14 +126,15 @@ const _EulerVarCount = 4
 
 function CompressibleEulerState(problem::CompressibleEulerProblem;
                                 T::Type = Float64,
-                                array_type = _DefaultArrayType,
+                                array_type = nothing,
                                 init = nothing,
                                 backend::ExecutionBackend = default_backend())
     mesh_obj = mesh(problem)
     dims = size(mesh_obj)
     eq = pde(problem)
 
-    field = allocate_cellfield(array_type, T, dims, _EulerVarCount)
+    array_type_val = array_type === nothing ? default_array_type(backend) : array_type
+    field = allocate_cellfield(array_type_val, T, dims, _EulerVarCount)
     _initialize_euler_field!(field, init, mesh_obj, eq, T)
 
     k1 = allocate_like(field)
@@ -161,9 +169,19 @@ function _initialize_euler_field!(field::CellField,
         centers_x, centers_y = cell_centers(mesh)
         nx, ny = size(mesh)
         γ = gamma(equation)
-        @inbounds for j in 1:ny, i in 1:nx
-            ρ, u, v, p = _extract_primitive(init, centers_x[i], centers_y[j])
-            _store_conserved!(field, i, j, ρ, u, v, p, γ, T)
+        density = component(field, 1)
+        if density isa Array
+            @inbounds for j in 1:ny, i in 1:nx
+                ρ, u, v, p = _extract_primitive(init, centers_x[i], centers_y[j])
+                _store_conserved!(field, i, j, ρ, u, v, p, γ, T)
+            end
+        else
+            host_field = allocate_cellfield(Array, T, (nx, ny), _EulerVarCount)
+            @inbounds for j in 1:ny, i in 1:nx
+                ρ, u, v, p = _extract_primitive(init, centers_x[i], centers_y[j])
+                _store_conserved!(host_field, i, j, ρ, u, v, p, γ, T)
+            end
+            copyto!(field, host_field)
         end
         return field
     else

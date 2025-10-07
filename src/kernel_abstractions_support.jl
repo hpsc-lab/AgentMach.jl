@@ -41,6 +41,8 @@ end
 
 @inline function _ka_rusanov_flux_x(γ, ρL, rhouL, rhovL, EL,
                                     ρR, rhouR, rhovR, ER)
+    T = promote_type(typeof(ρL), typeof(ρR))
+    half = inv(T(2))
     uxL, uyL, pL = _ka_velocity_pressure(γ, ρL, rhouL, rhovL, EL)
     uxR, uyR, pR = _ka_velocity_pressure(γ, ρR, rhouR, rhovR, ER)
     cL = sqrt(abs(γ * pL / ρL))
@@ -57,16 +59,18 @@ end
     FR3 = rhouR * uyR
     FR4 = (ER + pR) * uxR
 
-    flux1 = 0.5 * (FL1 + FR1) - 0.5 * smax * (ρR - ρL)
-    flux2 = 0.5 * (FL2 + FR2) - 0.5 * smax * (rhouR - rhouL)
-    flux3 = 0.5 * (FL3 + FR3) - 0.5 * smax * (rhovR - rhovL)
-    flux4 = 0.5 * (FL4 + FR4) - 0.5 * smax * (ER - EL)
+    flux1 = half * (FL1 + FR1) - half * smax * (ρR - ρL)
+    flux2 = half * (FL2 + FR2) - half * smax * (rhouR - rhouL)
+    flux3 = half * (FL3 + FR3) - half * smax * (rhovR - rhovL)
+    flux4 = half * (FL4 + FR4) - half * smax * (ER - EL)
 
     return flux1, flux2, flux3, flux4
 end
 
 @inline function _ka_rusanov_flux_y(γ, ρL, rhouL, rhovL, EL,
                                     ρR, rhouR, rhovR, ER)
+    T = promote_type(typeof(ρL), typeof(ρR))
+    half = inv(T(2))
     uxL, uyL, pL = _ka_velocity_pressure(γ, ρL, rhouL, rhovL, EL)
     uxR, uyR, pR = _ka_velocity_pressure(γ, ρR, rhouR, rhovR, ER)
     cL = sqrt(abs(γ * pL / ρL))
@@ -83,10 +87,10 @@ end
     GR3 = rhovR * uyR + pR
     GR4 = (ER + pR) * uyR
 
-    flux1 = 0.5 * (GL1 + GR1) - 0.5 * smax * (ρR - ρL)
-    flux2 = 0.5 * (GL2 + GR2) - 0.5 * smax * (rhouR - rhouL)
-    flux3 = 0.5 * (GL3 + GR3) - 0.5 * smax * (rhovR - rhovL)
-    flux4 = 0.5 * (GL4 + GR4) - 0.5 * smax * (ER - EL)
+    flux1 = half * (GL1 + GR1) - half * smax * (ρR - ρL)
+    flux2 = half * (GL2 + GR2) - half * smax * (rhouR - rhouL)
+    flux3 = half * (GL3 + GR3) - half * smax * (rhovR - rhovL)
+    flux4 = half * (GL4 + GR4) - half * smax * (ER - EL)
 
     return flux1, flux2, flux3, flux4
 end
