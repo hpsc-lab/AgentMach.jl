@@ -36,7 +36,16 @@ julia --project=. examples/linear_advection_demo.jl
 ```
 
 It prints periodic RMS diagnostics along with the CFL number used for the run.
-Tune parameters by editing the keyword arguments in `run_linear_advection_demo`.
+The driver defaults to the serial backend with `Float64` storage, but you can
+switch to a registered KernelAbstractions backend (dropping to `Float32` by
+default on GPUs) via keyword arguments:
+
+```bash
+julia --project=. -e 'include("examples/linear_advection_demo.jl"); run_linear_advection_demo(backend=:metal)'
+```
+
+Override the precision explicitly with `state_eltype=Float64` if you want to run
+the GPU case in double precision (CUDA) or stay on `Float32` for Metal.
 
 To capture diagnostics, pass output paths (created if missing):
 
@@ -73,6 +82,12 @@ convergence (EOC), and finishes with the average EOC. Edit
 `run_convergence_study` inside the script to adjust the final time, CFL target,
 or refinement levels.
 
+To exercise a GPU backend, reuse the `backend` keyword:
+
+```bash
+julia --project=. -e 'include("examples/convergence_linear_advection.jl"); run_convergence_study(backend=:metal, levels=4)'
+```
+
 ## Kelvin-Helmholtz instability
 
 The compressible Euler path is exercised by
@@ -84,12 +99,26 @@ julia --project=. examples/kelvin_helmholtz_euler.jl
 ```
 
 By default the driver uses a 256×256 mesh, RK2 time stepping with adaptive CFL
-control, and prints periodic log messages. Pass a file path via
-`diagnostics_path` to capture per-step CFL and kinetic-energy measurements. The
-routine returns the final state so you can post-process density, vorticity, or
-other derived fields. Supply `pdf_path` to snapshot the terminal density field,
-and `animation_path` (MP4 or GIF) plus `animation_every`/`animation_fps` to
-produce a time-resolved movie.
+control, and prints periodic log messages. Set `backend=:metal` (or `:cuda`)
+to run the scenario on a GPU; the helper automatically falls back to `Float32`
+storage for KernelAbstractions backends while keeping `Float64` for the serial
+path. Pass a file path via `diagnostics_path` to capture per-step CFL and
+kinetic-energy measurements. The routine returns the final state so you can
+post-process density, vorticity, or other derived fields. Supply `pdf_path` to
+snapshot the terminal density field, and `animation_path` (MP4 or GIF) plus
+`animation_every`/`animation_fps` to produce a time-resolved movie.
+
+## Backend profiling
+
+Compare the serial and GPU paths with the profiling helper:
+
+```bash
+julia --project=. examples/profile_backends.jl
+```
+
+It benchmarks the RK2 loops for linear advection and compressible Euler across
+the serial and any registered KernelAbstractions backends (CPU, Metal, CUDA),
+forcing `Float32` to keep Metal hardware supported.
 
 ## Maintainer
 
