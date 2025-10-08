@@ -173,8 +173,21 @@ Return the equation-of-motion descriptor stored within `problem`.
 """
 pde(problem::CompressibleEulerProblem) = problem.equation
 
+"""
+    source(problem)
+
+Return the volumetric source callback attached to `problem`, or `nothing` when
+no source term is registered.
+"""
 source(problem::CompressibleEulerProblem) = problem.source
 
+"""
+    limiter(problem)
+
+Expose the `AbstractLimiter` used for MUSCL slope limiting. Override this via
+the `limiter` keyword when constructing a problem to switch from the default
+`minmod_limiter` to a different strategy.
+"""
 limiter(problem::CompressibleEulerProblem) = problem.limiter
 
 """

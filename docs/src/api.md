@@ -36,7 +36,7 @@ velocity
 mesh
 boundary_conditions
 pde
-source
+source(::CodexMach.LinearAdvectionProblem)
 setup_linear_advection_problem
 LinearAdvectionState
 ```
@@ -46,8 +46,8 @@ LinearAdvectionState
 ```@docs
 CompressibleEuler
 CompressibleEulerProblem
-source
-limiter
+source(::CodexMach.CompressibleEulerProblem)
+limiter(::CodexMach.CompressibleEulerProblem)
 setup_compressible_euler_problem
 CompressibleEulerState
 primitive_variables

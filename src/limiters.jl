@@ -24,7 +24,20 @@ studies.
 """
 struct UnlimitedLimiter <: AbstractLimiter end
 
+"""
+    minmod_limiter
+
+Singleton instance of [`MinmodLimiter`](@ref) that can be reused across
+problems without allocating a new limiter.
+"""
 const minmod_limiter = MinmodLimiter()
+
+"""
+    unlimited_limiter
+
+Singleton instance of [`UnlimitedLimiter`](@ref) that disables slope limiting
+and yields the centred MUSCL slope average.
+"""
 const unlimited_limiter = UnlimitedLimiter()
 
 @inline function apply_limiter(::MinmodLimiter, ΔL, ΔR)
@@ -40,5 +53,10 @@ end
     return S((ΔL + ΔR) / 2)
 end
 
-@inline (lim::AbstractLimiter)(ΔL, ΔR) = apply_limiter(lim, ΔL, ΔR)
+"""
+    apply_limiter(limiter, ΔL, ΔR)
 
+Apply `limiter` to the left/right MUSCL differences `ΔL` and `ΔR`, returning
+the limited slope.
+"""
+@inline (lim::AbstractLimiter)(ΔL, ΔR) = apply_limiter(lim, ΔL, ΔR)
