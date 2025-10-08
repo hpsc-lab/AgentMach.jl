@@ -40,6 +40,14 @@ and yields the centred MUSCL slope average.
 """
 const unlimited_limiter = UnlimitedLimiter()
 
+"""
+    apply_limiter(limiter, ΔL, ΔR)
+
+Apply `limiter` to the left/right MUSCL differences `ΔL` and `ΔR`, returning
+the limited slope.
+"""
+function apply_limiter end
+
 @inline function apply_limiter(::MinmodLimiter, ΔL, ΔR)
     S = promote_type(typeof(ΔL), typeof(ΔR))
     if ΔL * ΔR <= 0
@@ -53,10 +61,4 @@ end
     return S((ΔL + ΔR) / 2)
 end
 
-"""
-    apply_limiter(limiter, ΔL, ΔR)
-
-Apply `limiter` to the left/right MUSCL differences `ΔL` and `ΔR`, returning
-the limited slope.
-"""
 @inline (lim::AbstractLimiter)(ΔL, ΔR) = apply_limiter(lim, ΔL, ΔR)
