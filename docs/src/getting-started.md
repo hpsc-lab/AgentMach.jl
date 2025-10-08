@@ -46,6 +46,8 @@ julia> include("/path/to/CodexMach.jl/docs/make.jl")
 The generated site is written to `docs/build/`. Open `index.html` in your
 browser to browse the manual.
 
+The hosted manual is published at [https://schlotm.github.io/CodexMach.jl/dev](https://schlotm.github.io/CodexMach.jl/dev).
+
 ## Next Steps
 
 - Work through the [Examples](examples.md) to reproduce the Kelvin–Helmholtz

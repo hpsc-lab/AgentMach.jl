@@ -1,6 +1,15 @@
 # CodexMach.jl
 
-CodexMach.jl is a fresh Julia package scaffold created as a starting point for parallel-computing experiments. The package currently exposes a tiny `greet` utility so that you can validate your development environment end-to-end.
+CodexMach.jl is a Julia playground for evaluating how Codex-style AI systems—`gpt-5-codex` in this repository—can design and grow scientific-computing software without direct human-authored code. The long-term objective is a CFD solver that scales to high-performance workloads, combining performance-minded kernels, multithreading, GPU execution, and (eventually) MPI for distributed runs. Contributions are welcome, with one key rule: all code must be produced through tools such as Copilot or Codex; manual patches are intentionally excluded so we can measure the tooling’s capabilities.
+
+Current highlights:
+
+- 2D structured meshes with second-order finite-volume discretisation.
+- Explicit RK2 time integration with shared stage buffers to avoid per-step allocation.
+- Linear scalar advection (upwind flux) and compressible Euler equations (MUSCL + Rusanov) with periodic boundaries.
+- Optional volumetric source callbacks that operate on both CPU and KernelAbstractions GPU backends.
+- Limiter abstraction (`MinmodLimiter`, `UnlimitedLimiter`) for MUSCL slopes, configurable per problem.
+- Manufactured-solution convergence suites for advection and Euler, with per-variable error/EOC reporting.
 
 ## Getting started
 
@@ -12,18 +21,9 @@ julia> greet()
 "Hello, world! Welcome to CodexMach."
 ```
 
-## Testing
-
-Run the package tests with Julia's package manager:
-
-```julia
-pkg> activate .
-pkg> test
-```
-
 ## Documentation
 
-The repository ships with a bare `docs/` folder ready to host Documenter.jl-based documentation if you choose to add it later. A GitHub Actions workflow is also included so CI runs tests on every push.
+Hosted documentation lives at [https://schlotm.github.io/CodexMach.jl/dev](https://schlotm.github.io/CodexMach.jl/dev). It covers usage examples, API details, and convergence studies for each physics module.
 
 ## Example simulation
 
