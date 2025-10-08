@@ -1,10 +1,12 @@
 """
     run_linear_advection!(state, problem; steps, dt=nothing, cfl_target=0.9,
-                           log_every=0, callback=nothing, record_cfl=false)
+                           log_every=0, callback=nothing, record_cfl=false,
+                           show_timers=true)
 
 Advance a `LinearAdvectionState` for a fixed number of RK2 steps. Either provide
 `dt` explicitly or supply a `cfl_target`, which is passed to `stable_timestep` to
 infer a step size. Optional logging and callback hooks support simple drivers.
+Set `show_timers = false` to suppress the aggregated `TimerOutputs` summary.
 
 The function returns a named tuple summarising integration details.
 """
@@ -15,7 +17,8 @@ function run_linear_advection!(state::LinearAdvectionState,
                                cfl_target::Real = 0.9,
                                log_every::Integer = 0,
                                callback = nothing,
-                               record_cfl::Bool = false)
+                               record_cfl::Bool = false,
+                               show_timers::Bool = true)
     steps > 0 || throw(ArgumentError("steps must be positive"))
     log_every >= 0 || throw(ArgumentError("log_every must be non-negative"))
 
@@ -58,7 +61,9 @@ function run_linear_advection!(state::LinearAdvectionState,
                cfl = cfl,
                cfl_history = history)
 
-    print_timer(stdout, timer; allocations = true, sortby = :time)
+    if show_timers
+        print_timer(stdout, timer; allocations = true, sortby = :time)
+    end
 
     return result
 end
@@ -66,11 +71,12 @@ end
 """
     run_compressible_euler!(state, problem; steps, dt=nothing, cfl_target=0.45,
                              log_every=0, callback=nothing, record_cfl=false,
-                             adapt_dt=true)
+                             adapt_dt=true, show_timers=true)
 
 Advance a `CompressibleEulerState` for a fixed number of RK2 steps. If `dt` is
 omitted, a stable timestep is recomputed from the current state each iteration
 using the requested `cfl_target`.
+Set `show_timers = false` to suppress the aggregated `TimerOutputs` summary.
 """
 function run_compressible_euler!(state::CompressibleEulerState,
                                  problem::CompressibleEulerProblem;
@@ -80,7 +86,8 @@ function run_compressible_euler!(state::CompressibleEulerState,
                                  log_every::Integer = 0,
                                  callback = nothing,
                                  record_cfl::Bool = false,
-                                 adapt_dt::Bool = true)
+                                 adapt_dt::Bool = true,
+                                 show_timers::Bool = true)
     steps > 0 || throw(ArgumentError("steps must be positive"))
     log_every >= 0 || throw(ArgumentError("log_every must be non-negative"))
 
@@ -138,7 +145,9 @@ function run_compressible_euler!(state::CompressibleEulerState,
                cfl = last_cfl,
                cfl_history = history)
 
-    print_timer(stdout, timer; allocations = true, sortby = :time)
+    if show_timers
+        print_timer(stdout, timer; allocations = true, sortby = :time)
+    end
 
     return result
 end

@@ -49,7 +49,7 @@ function run_convergence_study(; base_resolution::Tuple{Int,Int} = (16, 16),
         steps = max(1, ceil(Int, final_time / dt_stable))
         dt = final_time / steps
 
-        run_linear_advection!(state, problem; steps = steps, dt = dt)
+        run_linear_advection!(state, problem; steps = steps, dt = dt, show_timers = false)
 
         u_field = solution(state)
         u_num_backend = scalar_component(u_field)
