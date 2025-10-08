@@ -20,16 +20,13 @@ jobs:
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
-      - uses: actions/cache@v3
-        with:
-          path: ~/.julia/artifacts
-          key: artifacts-${{ runner.os }}-${{ hashFiles('**/Project.toml') }}
-          restore-keys: |
-            artifacts-${{ runner.os }}-
-      - name: Instantiate dependencies
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+      - uses: julia-actions/cache@v2
+      - name: Build package
+        uses: julia-actions/julia-buildpkg@v1
       - name: Run tests with coverage
-        run: julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
+        uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: true
       - name: Process coverage
         uses: julia-actions/julia-processcoverage@v1
         with:
