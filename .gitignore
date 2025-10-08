@@ -21,6 +21,8 @@ notebooks/
 
 # Coverage reports
 coverage/
+*.cov
+lcov.info
 
 # Local Julia depot
 .julia/
