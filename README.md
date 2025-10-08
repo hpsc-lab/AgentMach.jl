@@ -1,7 +1,7 @@
 # CodexMach.jl
 
 [![docs | dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://hpsc-lab.github.io/CodexMach.jl/)
-[![CI](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/ci.yml)
+[![CI](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/CI.yml)
 [![Codecov](https://codecov.io/gh/hpsc-lab/CodexMach.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/hpsc-lab/CodexMach.jl)
 [![Coveralls](https://coveralls.io/repos/github/hpsc-lab/CodexMach.jl/badge.svg?branch=main)](https://coveralls.io/github/hpsc-lab/CodexMach.jl?branch=main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
