@@ -407,6 +407,7 @@ function _compressible_euler_rhs_ka!(backend::KernelAbstractionsBackend,
     inv_dx = T(1) / T(dx)
     inv_dy = T(1) / T(dy)
     γ = T(gamma(eq))
+    lim = limiter(problem)
 
     for comp in 1:ncomponents(du)
         fill!(component(du, comp), zero(T))
@@ -428,7 +429,7 @@ function _compressible_euler_rhs_ka!(backend::KernelAbstractionsBackend,
         _compressible_euler_rhs_kernel!(device, backend.workgroupsize)
     kernel(dρ, drhou, drhov, dE,
            ρ, rhou, rhov, E,
-           γ, inv_dx, inv_dy; ndrange = (nx, ny))
+           γ, inv_dx, inv_dy, lim; ndrange = (nx, ny))
     KernelAbstractions.synchronize(device)
     _apply_source!(du, u, problem, t)
     return du
@@ -618,6 +619,7 @@ function _compressible_euler_rhs!(du::CellField,
     inv_dx = one(T) / T(dx)
     inv_dy = one(T) / T(dy)
     γ = gamma(eq)
+    lim = limiter(problem)
     fill!(du, zero(T))
 
     ρ = component(u, 1)
@@ -649,10 +651,10 @@ function _compressible_euler_rhs!(du::CellField,
             ΔLE = E[i, j] - E[im, j]
             ΔRE = E[ip, j] - E[i, j]
 
-            sρ = _minmod(ΔLρ, ΔRρ)
-            srhox = _minmod(ΔLrhox, ΔRrhox)
-            srhoy = _minmod(ΔLrhoy, ΔRrhoy)
-            sE = _minmod(ΔLE, ΔRE)
+            sρ = apply_limiter(lim, ΔLρ, ΔRρ)
+            srhox = apply_limiter(lim, ΔLrhox, ΔRrhox)
+            srhoy = apply_limiter(lim, ΔLrhoy, ΔRrhoy)
+            sE = apply_limiter(lim, ΔLE, ΔRE)
 
             ρL = ρ[i, j] + T(0.5) * sρ
             rhouL = rhou[i, j] + T(0.5) * srhox
@@ -669,10 +671,10 @@ function _compressible_euler_rhs!(du::CellField,
             ΔLE_ip = E[ip, j] - E[i, j]
             ΔRE_ip = E[ip2, j] - E[ip, j]
 
-            sρ_ip = _minmod(ΔLρ_ip, ΔRρ_ip)
-            srhox_ip = _minmod(ΔLrhox_ip, ΔRrhox_ip)
-            srhoy_ip = _minmod(ΔLrhoy_ip, ΔRrhoy_ip)
-            sE_ip = _minmod(ΔLE_ip, ΔRE_ip)
+            sρ_ip = apply_limiter(lim, ΔLρ_ip, ΔRρ_ip)
+            srhox_ip = apply_limiter(lim, ΔLrhox_ip, ΔRrhox_ip)
+            srhoy_ip = apply_limiter(lim, ΔLrhoy_ip, ΔRrhoy_ip)
+            sE_ip = apply_limiter(lim, ΔLE_ip, ΔRE_ip)
 
             ρR = ρ[ip, j] - T(0.5) * sρ_ip
             rhouR = rhou[ip, j] - T(0.5) * srhox_ip
@@ -709,10 +711,10 @@ function _compressible_euler_rhs!(du::CellField,
             ΔLE = E[i, j] - E[i, jm]
             ΔRE = E[i, jp] - E[i, j]
 
-            sρ = _minmod(ΔLρ, ΔRρ)
-            srhox = _minmod(ΔLrhox, ΔRrhox)
-            srhoy = _minmod(ΔLrhoy, ΔRrhoy)
-            sE = _minmod(ΔLE, ΔRE)
+            sρ = apply_limiter(lim, ΔLρ, ΔRρ)
+            srhox = apply_limiter(lim, ΔLrhox, ΔRrhox)
+            srhoy = apply_limiter(lim, ΔLrhoy, ΔRrhoy)
+            sE = apply_limiter(lim, ΔLE, ΔRE)
 
             ρL = ρ[i, j] + T(0.5) * sρ
             rhouL = rhou[i, j] + T(0.5) * srhox
@@ -728,10 +730,10 @@ function _compressible_euler_rhs!(du::CellField,
             ΔLE_jp = E[i, jp] - E[i, j]
             ΔRE_jp = E[i, jp2] - E[i, jp]
 
-            sρ_jp = _minmod(ΔLρ_jp, ΔRρ_jp)
-            srhox_jp = _minmod(ΔLrhox_jp, ΔRrhox_jp)
-            srhoy_jp = _minmod(ΔLrhoy_jp, ΔRrhoy_jp)
-            sE_jp = _minmod(ΔLE_jp, ΔRE_jp)
+            sρ_jp = apply_limiter(lim, ΔLρ_jp, ΔRρ_jp)
+            srhox_jp = apply_limiter(lim, ΔLrhox_jp, ΔRrhox_jp)
+            srhoy_jp = apply_limiter(lim, ΔLrhoy_jp, ΔRrhoy_jp)
+            sE_jp = apply_limiter(lim, ΔLE_jp, ΔRE_jp)
 
             ρR = ρ[i, jp] - T(0.5) * sρ_jp
             rhouR = rhou[i, jp] - T(0.5) * srhox_jp
@@ -926,13 +928,6 @@ function _euler_characteristics(u, γ, backend::KernelAbstractionsBackend)
 end
 
 # Utility micro-kernels for Euler RHS
-
-@inline function _minmod(a, b)
-    if a * b <= 0
-        return zero(promote_type(typeof(a), typeof(b)))
-    end
-    return copysign(min(abs(a), abs(b)), a)
-end
 
 @inline function _thermodynamics(eq::CompressibleEuler, ρ, rhou, rhov, E)
     prim = primitive_variables(eq, ρ, rhou, rhov, E)

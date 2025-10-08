@@ -124,29 +124,32 @@ end
 gamma(eq::CompressibleEuler) = eq.gamma
 
 """
-    CompressibleEulerProblem(mesh, bc, equation, [source])
+    CompressibleEulerProblem(mesh, bc, equation, [source], [limiter])
 
 Bundle the mesh, boundary conditions, and PDE description for the 2D
 compressible Euler equations. The optional `source` callback is invoked as
-`source(du, u, problem, t)` to accumulate volumetric forcing.
+`source(du, u, problem, t)` to accumulate volumetric forcing, while the
+`limiter` controls the MUSCL slope limiting strategy.
 """
-struct CompressibleEulerProblem{M,B,T,S}
+struct CompressibleEulerProblem{M,B,T,S,L}
     mesh::M
     boundary_conditions::B
     equation::CompressibleEuler{T}
     source::S
+    limiter::L
     function CompressibleEulerProblem(mesh::M,
                                       boundary_conditions::B,
                                       equation::CompressibleEuler{T},
-                                      source::S) where {M,B,T,S}
-        new{M,B,T,S}(mesh, boundary_conditions, equation, source)
+                                      source::S,
+                                      limiter::L) where {M,B,T,S,L}
+        new{M,B,T,S,L}(mesh, boundary_conditions, equation, source, limiter)
     end
 end
 
 function CompressibleEulerProblem(mesh::M,
                                   boundary_conditions::B,
                                   equation::CompressibleEuler{T}) where {M,B,T}
-    return CompressibleEulerProblem(mesh, boundary_conditions, equation, nothing)
+    return CompressibleEulerProblem(mesh, boundary_conditions, equation, nothing, minmod_limiter)
 end
 
 """
@@ -172,6 +175,8 @@ pde(problem::CompressibleEulerProblem) = problem.equation
 
 source(problem::CompressibleEulerProblem) = problem.source
 
+limiter(problem::CompressibleEulerProblem) = problem.limiter
+
 """
     setup_compressible_euler_problem(nx, ny; lengths=(1.0, 1.0), origin=(0.0, 0.0),
                                      gamma=1.4,
@@ -180,7 +185,8 @@ source(problem::CompressibleEulerProblem) = problem.source
 
 Create a compressible Euler problem on a structured mesh with configurable
 boundary conditions (defaults to fully periodic). Provide a `source` callback
-with signature `(du, u, problem, t)` to add volumetric forcing in-place.
+with signature `(du, u, problem, t)` to add volumetric forcing in-place, and
+optionally supply an `AbstractLimiter` to control MUSCL slope limiting.
 """
 function setup_compressible_euler_problem(nx::Integer,
                                           ny::Integer;
@@ -188,10 +194,11 @@ function setup_compressible_euler_problem(nx::Integer,
                                           origin::NTuple{2,<:Real} = (0.0, 0.0),
                                           gamma::Real = 1.4,
                                           boundary_conditions::AbstractBoundaryConditions = PeriodicBoundaryConditions(),
-                                          source = nothing)
+                                          source = nothing,
+                                          limiter::AbstractLimiter = minmod_limiter)
     mesh = StructuredMesh(nx, ny; lengths = lengths, origin = origin)
     eq = CompressibleEuler(; gamma = gamma)
-    return CompressibleEulerProblem(mesh, boundary_conditions, eq, source)
+    return CompressibleEulerProblem(mesh, boundary_conditions, eq, source, limiter)
 end
 
 """

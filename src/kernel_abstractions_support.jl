@@ -22,14 +22,6 @@ function _resolve_ka_device(spec)
     end
 end
 
-@inline function _ka_minmod(a, b)
-    S = promote_type(typeof(a), typeof(b))
-    if a * b <= 0
-        return zero(S)
-    end
-    return S(copysign(min(abs(a), abs(b)), a))
-end
-
 @inline function _ka_velocity_pressure(γ, ρ, rhou, rhov, E)
     invρ = one(ρ) / ρ
     ux = rhou * invρ
@@ -221,7 +213,7 @@ end
 
 @kernel function _compressible_euler_rhs_kernel!(dρ, drhou, drhov, dE,
                                                  ρ, rhou, rhov, E,
-                                                 γ, inv_dx, inv_dy)
+                                                 γ, inv_dx, inv_dy, lim)
     i, j = @index(Global, NTuple)
     nx, ny = size(ρ)
     if i <= nx && j <= ny
@@ -247,10 +239,10 @@ end
         ΔLE = E[i, j] - E[im, j]
         ΔRE = E[ip, j] - E[i, j]
 
-        sρ = _ka_minmod(ΔLρ, ΔRρ)
-        srhox = _ka_minmod(ΔLrhox, ΔRrhox)
-        srhoy = _ka_minmod(ΔLrhoy, ΔRrhoy)
-        sE = _ka_minmod(ΔLE, ΔRE)
+        sρ = apply_limiter(lim, ΔLρ, ΔRρ)
+        srhox = apply_limiter(lim, ΔLrhox, ΔRrhox)
+        srhoy = apply_limiter(lim, ΔLrhoy, ΔRrhoy)
+        sE = apply_limiter(lim, ΔLE, ΔRE)
 
         ρL_plus = ρ[i, j] + half * sρ
         rhouL_plus = rhou[i, j] + half * srhox
@@ -267,10 +259,10 @@ end
         ΔLE_ip = E[ip, j] - E[i, j]
         ΔRE_ip = E[ip2, j] - E[ip, j]
 
-        sρ_ip = _ka_minmod(ΔLρ_ip, ΔRρ_ip)
-        srhox_ip = _ka_minmod(ΔLrhox_ip, ΔRrhox_ip)
-        srhoy_ip = _ka_minmod(ΔLrhoy_ip, ΔRrhoy_ip)
-        sE_ip = _ka_minmod(ΔLE_ip, ΔRE_ip)
+        sρ_ip = apply_limiter(lim, ΔLρ_ip, ΔRρ_ip)
+        srhox_ip = apply_limiter(lim, ΔLrhox_ip, ΔRrhox_ip)
+        srhoy_ip = apply_limiter(lim, ΔLrhoy_ip, ΔRrhoy_ip)
+        sE_ip = apply_limiter(lim, ΔLE_ip, ΔRE_ip)
 
         ρR_plus = ρ[ip, j] - half * sρ_ip
         rhouR_plus = rhou[ip, j] - half * srhox_ip
@@ -291,10 +283,10 @@ end
         ΔLE_im = E[im, j] - E[im2, j]
         ΔRE_im = E[i, j] - E[im, j]
 
-        sρ_im = _ka_minmod(ΔLρ_im, ΔRρ_im)
-        srhox_im = _ka_minmod(ΔLrhox_im, ΔRrhox_im)
-        srhoy_im = _ka_minmod(ΔLrhoy_im, ΔRrhoy_im)
-        sE_im = _ka_minmod(ΔLE_im, ΔRE_im)
+        sρ_im = apply_limiter(lim, ΔLρ_im, ΔRρ_im)
+        srhox_im = apply_limiter(lim, ΔLrhox_im, ΔRrhox_im)
+        srhoy_im = apply_limiter(lim, ΔLrhoy_im, ΔRrhoy_im)
+        sE_im = apply_limiter(lim, ΔLE_im, ΔRE_im)
 
         ρL_minus = ρ[im, j] + half * sρ_im
         rhouL_minus = rhou[im, j] + half * srhox_im
@@ -320,10 +312,10 @@ end
         ΔLE_y = E[i, j] - E[i, jm]
         ΔRE_y = E[i, jp] - E[i, j]
 
-        sρ_y = _ka_minmod(ΔLρ_y, ΔRρ_y)
-        srhox_y = _ka_minmod(ΔLrhox_y, ΔRrhox_y)
-        srhoy_y = _ka_minmod(ΔLrhoy_y, ΔRrhoy_y)
-        sE_y = _ka_minmod(ΔLE_y, ΔRE_y)
+        sρ_y = apply_limiter(lim, ΔLρ_y, ΔRρ_y)
+        srhox_y = apply_limiter(lim, ΔLrhox_y, ΔRrhox_y)
+        srhoy_y = apply_limiter(lim, ΔLrhoy_y, ΔRrhoy_y)
+        sE_y = apply_limiter(lim, ΔLE_y, ΔRE_y)
 
         ρL_plus_y = ρ[i, j] + half * sρ_y
         rhouL_plus_y = rhou[i, j] + half * srhox_y
@@ -339,10 +331,10 @@ end
         ΔLE_jp = E[i, jp] - E[i, j]
         ΔRE_jp = E[i, jp2] - E[i, jp]
 
-        sρ_jp = _ka_minmod(ΔLρ_jp, ΔRρ_jp)
-        srhox_jp = _ka_minmod(ΔLrhox_jp, ΔRrhox_jp)
-        srhoy_jp = _ka_minmod(ΔLrhoy_jp, ΔRrhoy_jp)
-        sE_jp = _ka_minmod(ΔLE_jp, ΔRE_jp)
+        sρ_jp = apply_limiter(lim, ΔLρ_jp, ΔRρ_jp)
+        srhox_jp = apply_limiter(lim, ΔLrhox_jp, ΔRrhox_jp)
+        srhoy_jp = apply_limiter(lim, ΔLrhoy_jp, ΔRrhoy_jp)
+        sE_jp = apply_limiter(lim, ΔLE_jp, ΔRE_jp)
 
         ρR_plus_y = ρ[i, jp] - half * sρ_jp
         rhouR_plus_y = rhou[i, jp] - half * srhox_jp
@@ -363,10 +355,10 @@ end
         ΔLE_jm = E[i, jm] - E[i, jm2]
         ΔRE_jm = E[i, j] - E[i, jm]
 
-        sρ_jm = _ka_minmod(ΔLρ_jm, ΔRρ_jm)
-        srhox_jm = _ka_minmod(ΔLrhox_jm, ΔRrhox_jm)
-        srhoy_jm = _ka_minmod(ΔLrhoy_jm, ΔRrhoy_jm)
-        sE_jm = _ka_minmod(ΔLE_jm, ΔRE_jm)
+        sρ_jm = apply_limiter(lim, ΔLρ_jm, ΔRρ_jm)
+        srhox_jm = apply_limiter(lim, ΔLrhox_jm, ΔRrhox_jm)
+        srhoy_jm = apply_limiter(lim, ΔLrhoy_jm, ΔRrhoy_jm)
+        sE_jm = apply_limiter(lim, ΔLE_jm, ΔRE_jm)
 
         ρL_minus_y = ρ[i, jm] + half * sρ_jm
         rhouL_minus_y = rhou[i, jm] + half * srhox_jm

@@ -75,7 +75,7 @@ julia --project=run examples/convergence_compressible_euler.jl
 Metal GPU:
 
 ```
-julia --project=run -e 'using Metal; include("examples/convergence_compressible_euler.jl"); run_euler_convergence_study(backend=:metal, levels=4)'
+julia --project=run -e 'using Metal; include("examples/convergence_compressible_euler.jl"); run_euler_convergence_study(backend=:metal, limiter=unlimited_limiter)'
 ```
 
 This driver verifies second-order accuracy for the compressible Euler solver
@@ -84,7 +84,10 @@ to generate volumetric forcing, ensuring the analytical fields remain an exact
 solution. The run begins on a 64×64 mesh, refines through three additional
 levels, and advances only to `t = 0.05` so the step count stays modest. For each
 resolution the script reports conserved-variable L² errors `(ρ, ρu, ρv, E)`
-together with their per-component convergence rates.
+together with their per-component convergence rates. Pass
+`limiter=unlimited_limiter` when calling `run_euler_convergence_study` to
+recover the unlimited MUSCL scheme for smooth manufactured tests, or omit it to
+exercise the default minmod limiter.
 
 ## Kelvin–Helmholtz Instability (Compressible Euler)
 

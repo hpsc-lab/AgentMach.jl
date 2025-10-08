@@ -1,6 +1,7 @@
 #!/usr/bin/env julia
 using CodexMach
 using Printf
+using KernelAbstractions
 
 const DEFAULT_MMS_PARAMS = (
     rho0 = 1.0,
@@ -15,20 +16,22 @@ const DEFAULT_MMS_PARAMS = (
 )
 
 """
-    run_euler_convergence_study(; base_resolution=(64, 64), levels=4,
+    run_euler_convergence_study(; base_resolution=(128, 128), levels=4,
                                    lengths=(1.0, 1.0), gamma=1.4,
                                    final_time=0.05, cfl=0.3,
                                    backend=default_backend(),
                                    state_eltype=nothing,
-                                   params=DEFAULT_MMS_PARAMS)
+                                   params=DEFAULT_MMS_PARAMS,
+                                   limiter=minmod_limiter)
 
 Perform a grid refinement study for the compressible Euler equations using a
 time-dependent manufactured solution with sinusoidal structure. The volumetric
 source term is chosen so that the analytical state remains an exact solution,
 allowing L₂ error estimates for each conserved component `(ρ, ρu, ρv, E)` at the
-requested `final_time`.
+requested `final_time`. Set `limiter = unlimited_limiter` to recover an
+unlimited MUSCL reconstruction for smooth convergence tests.
 """
-function run_euler_convergence_study(; base_resolution::Tuple{Int,Int} = (64, 64),
+function run_euler_convergence_study(; base_resolution::Tuple{Int,Int} = (128, 128),
                                       levels::Int = 4,
                                       lengths::Tuple{<:Real,<:Real} = (1.0, 1.0),
                                       gamma::Real = 1.4,
@@ -36,7 +39,8 @@ function run_euler_convergence_study(; base_resolution::Tuple{Int,Int} = (64, 64
                                       cfl::Real = 0.3,
                                       backend::Union{ExecutionBackend,Symbol} = default_backend(),
                                       state_eltype::Union{Nothing,Type} = nothing,
-                                      params = DEFAULT_MMS_PARAMS)
+                                      params = DEFAULT_MMS_PARAMS,
+                                      limiter::AbstractLimiter = minmod_limiter)
     @assert levels >= 2 "Need at least two levels to measure convergence"
 
     Lx, Ly = float(lengths[1]), float(lengths[2])
@@ -46,7 +50,7 @@ function run_euler_convergence_study(; base_resolution::Tuple{Int,Int} = (64, 64
 
     backend_obj = _resolve_example_backend(backend)
     state_T = isnothing(state_eltype) ? _default_state_eltype(backend_obj) : state_eltype
-    source_cb = _manufactured_source_factory(params, kx, ky, γ)
+    source_cb = _manufactured_source_factory(params, kx, ky, γ, backend_obj)
 
     nx0, ny0 = base_resolution
     hs = Float64[]
@@ -69,7 +73,8 @@ function run_euler_convergence_study(; base_resolution::Tuple{Int,Int} = (64, 64
         problem = setup_compressible_euler_problem(nx, ny;
                                                    lengths = (Lx, Ly),
                                                    gamma = γ,
-                                                   source = source_cb)
+                                                   source = source_cb,
+                                                   limiter = limiter)
 
         init = _manufactured_initializer(params, kx, ky)
         state = CompressibleEulerState(problem;
@@ -109,7 +114,7 @@ function run_euler_convergence_study(; base_resolution::Tuple{Int,Int} = (64, 64
                     _manufactured_primitives(params, kx, ky, x, y, t_eval)
                 ρu_exact = ρ_exact * u_exact
                 ρv_exact = ρ_exact * v_exact
-                E_exact = p_exact / (γ - 1) + 0.5 * ρ_exact * (u_exact^2 + v_exact^2)
+        E_exact = p_exact / (γ - 1) + (ρ_exact * (u_exact^2 + v_exact^2)) / 2
 
                 δρ = rho_num[i, j] - ρ_exact
                 δρu = rhou_num[i, j] - ρu_exact
@@ -178,36 +183,46 @@ function _manufactured_initializer(params, kx, ky)
     return init
 end
 
-function _manufactured_source_factory(params, kx, ky, γ)
+function _manufactured_source_factory(params, kx, ky, γ, backend_obj)
     function source!(du, _, problem, t)
         mesh_obj = mesh(problem)
-        centers_x, centers_y = cell_centers(mesh_obj)
         nx, ny = size(mesh_obj)
+        dx, dy = spacing(mesh_obj)
+        ox, oy = origin(mesh_obj)
 
         dρ = component(du, 1)
         drhou = component(du, 2)
         drhov = component(du, 3)
         dE = component(du, 4)
 
-        @inbounds for j in 1:ny
-            y = centers_y[j]
-            for i in 1:nx
-                x = centers_x[i]
-                phase = kx * x + ky * y - params.omega * t
-                s = sin(phase)
-                c = cos(phase)
-                ρ, u, v, p = _manufactured_state(params, s, c)
-                Sρ, Sρu, Sρv, SE = _manufactured_sources(params, kx, ky, γ, s, c, ρ, u, v, p)
-                dρ[i, j] += Sρ
-                drhou[i, j] += Sρu
-                drhov[i, j] += Sρv
-                dE[i, j] += SE
-            end
+        T = eltype(dρ)
+        params_T = _typed_params(params, T)
+        kxT = T(kx)
+        kyT = T(ky)
+        γT = T(γ)
+
+        if backend_obj isa KernelAbstractionsBackend
+            device = CodexMach._resolve_ka_device(backend_obj.device)
+            kernel = backend_obj.workgroupsize === nothing ?
+                _manufactured_source_kernel!(device) :
+                _manufactured_source_kernel!(device, backend_obj.workgroupsize)
+            kernel(params_T, kxT, kyT, γT, T(ox), T(oy), T(dx), T(dy), T(t),
+                   dρ, drhou, drhov, dE; ndrange = (nx, ny))
+            KernelAbstractions.synchronize(device)
+        else
+            _manufactured_source_accumulate!(dρ, drhou, drhov, dE,
+                                             params_T, kxT, kyT, γT,
+                                             T(ox), T(oy), T(dx), T(dy),
+                                             nx, ny, T(t))
         end
 
         return du
     end
     return source!
+end
+
+function _typed_params(params::NamedTuple, ::Type{T}) where {T}
+    return NamedTuple{keys(params)}(Tuple(T(val) for val in values(params)))
 end
 
 @inline function _manufactured_state(params, s, c)
@@ -227,6 +242,8 @@ end
 
 function _manufactured_sources(params, kx, ky, γ, s, c, ρ, u, v, p)
     ω = params.omega
+    oneT = one(ω)
+    two = one(ω) + one(ω)
 
     ρt = -params.rho_amp * ω * c
     ρx =  params.rho_amp * kx * c
@@ -244,8 +261,8 @@ function _manufactured_sources(params, kx, ky, γ, s, c, ρ, u, v, p)
     px = -params.p_amp * kx * s
     py = -params.p_amp * ky * s
 
-    u2 = u^2
-    v2 = v^2
+    u2 = u * u
+    v2 = v * v
 
     ρu_t = ρt * u + ρ * ut
     ρv_t = ρt * v + ρ * vt
@@ -255,16 +272,17 @@ function _manufactured_sources(params, kx, ky, γ, s, c, ρ, u, v, p)
     ρv_x = ρx * v + ρ * vx
     ρv_y = ρy * v + ρ * vy
 
-    ρu2_x = ρx * u2 + ρ * 2u * ux
-    ρv2_y = ρy * v2 + ρ * 2v * vy
+    ρu2_x = ρx * u2 + ρ * (two * u * ux)
+    ρv2_y = ρy * v2 + ρ * (two * v * vy)
 
     ρuv_x = ρx * u * v + ρ * (ux * v + u * vx)
     ρuv_y = ρy * u * v + ρ * (uy * v + u * vy)
 
-    E = p / (γ - 1) + 0.5 * ρ * (u2 + v2)
-    Et = pt / (γ - 1) + 0.5 * ρt * (u2 + v2) + ρ * (u * ut + v * vt)
-    Ex = px / (γ - 1) + 0.5 * ρx * (u2 + v2) + ρ * (u * ux + v * vx)
-    Ey = py / (γ - 1) + 0.5 * ρy * (u2 + v2) + ρ * (u * uy + v * vy)
+    γm1_inv = oneT / (γ - oneT)
+    E = p * γm1_inv + (u2 + v2) * (ρ * (oneT / two))
+    Et = pt * γm1_inv + (ρt * (u2 + v2) + two * ρ * (u * ut + v * vt)) * (oneT / two)
+    Ex = px * γm1_inv + (ρx * (u2 + v2) + two * ρ * (u * ux + v * vx)) * (oneT / two)
+    Ey = py * γm1_inv + (ρy * (u2 + v2) + two * ρ * (u * uy + v * vy)) * (oneT / two)
 
     mass_res = ρt + ρu_x + ρv_y
 
@@ -275,6 +293,50 @@ function _manufactured_sources(params, kx, ky, γ, s, c, ρ, u, v, p)
     energy_res = Et + ((Ex + px) * u + Eplusp * ux) + ((Ey + py) * v + Eplusp * vy)
 
     return mass_res, momx_res, momy_res, energy_res
+end
+
+function _manufactured_source_accumulate!(dρ, drhou, drhov, dE,
+                                          params, kx, ky, γ,
+                                          ox, oy, dx, dy,
+                                          nx, ny, t)
+    T = eltype(dρ)
+    half = T(0.5)
+    @inbounds for j in 1:ny
+        y = oy + (T(j) - half) * dy
+        for i in 1:nx
+            x = ox + (T(i) - half) * dx
+            phase = kx * x + ky * y - params.omega * t
+            s = sin(phase)
+            c = cos(phase)
+            ρ, u, v, p = _manufactured_state(params, s, c)
+            Sρ, Sρu, Sρv, SE = _manufactured_sources(params, kx, ky, γ, s, c, ρ, u, v, p)
+            dρ[i, j] += T(Sρ)
+            drhou[i, j] += T(Sρu)
+            drhov[i, j] += T(Sρv)
+            dE[i, j] += T(SE)
+        end
+    end
+
+    return dρ
+end
+
+@kernel function _manufactured_source_kernel!(params, kx, ky, γ,
+                                              ox, oy, dx, dy, t,
+                                              dρ, drhou, drhov, dE)
+    i, j = @index(Global, NTuple)
+    T = eltype(dρ)
+    half = T(0.5)
+    x = ox + (T(i) - half) * dx
+    y = oy + (T(j) - half) * dy
+    phase = kx * x + ky * y - params.omega * t
+    s = sin(phase)
+    c = cos(phase)
+    ρ, u, v, p = _manufactured_state(params, s, c)
+    Sρ, Sρu, Sρv, SE = _manufactured_sources(params, kx, ky, γ, s, c, ρ, u, v, p)
+    dρ[i, j] += T(Sρ)
+    drhou[i, j] += T(Sρu)
+    drhov[i, j] += T(Sρv)
+    dE[i, j] += T(SE)
 end
 
 function _resolve_example_backend(spec::ExecutionBackend)

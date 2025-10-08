@@ -47,10 +47,22 @@ LinearAdvectionState
 CompressibleEuler
 CompressibleEulerProblem
 source
+limiter
 setup_compressible_euler_problem
 CompressibleEulerState
 primitive_variables
 _primitive_variables_cpu
+```
+
+## Limiters
+
+```@docs
+AbstractLimiter
+MinmodLimiter
+UnlimitedLimiter
+minmod_limiter
+unlimited_limiter
+apply_limiter
 ```
 
 ## Time Integration

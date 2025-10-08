@@ -86,6 +86,26 @@ convergence (EOC), and finishes with the average EOC. Edit
 `run_convergence_study` inside the script to adjust the final time, CFL target,
 or refinement levels.
 
+## Compressible Euler convergence
+
+CPU run:
+
+```bash
+julia --project=run examples/convergence_compressible_euler.jl
+```
+
+Metal GPU run (requires `using Metal` and a registered backend):
+
+```bash
+julia --project=run -e 'using Metal; include("examples/convergence_compressible_euler.jl");
+                         run_euler_convergence_study(backend=:metal, limiter=unlimited_limiter)'
+```
+
+The script drives a manufactured solution over a hierarchy of meshes and
+reports L₂ errors for each conserved component `(ρ, ρu, ρv, E)` plus their
+individual EOCs. Pass `limiter=unlimited_limiter` to disable slope limiting and
+recover the nominal second-order MUSCL accuracy on smooth problems.
+
 ## Kelvin-Helmholtz instability
 
 CPU run:

@@ -10,6 +10,7 @@ include("mesh.jl")
 include("boundary_conditions.jl")
 include("fields.jl")
 include("backends.jl")
+include("limiters.jl")
 include("kernel_abstractions_support.jl")
 include("equations.jl")
 include("time_integration.jl")
@@ -46,6 +47,7 @@ export greet,
        boundary_conditions,
        pde,
        source,
+       limiter,
        setup_linear_advection_problem,
        LinearAdvectionState,
        RK2Workspace,
@@ -62,7 +64,13 @@ export greet,
        setup_compressible_euler_problem,
        CompressibleEulerState,
        run_compressible_euler!,
-       primitive_variables
+       primitive_variables,
+       AbstractLimiter,
+       MinmodLimiter,
+       UnlimitedLimiter,
+       minmod_limiter,
+       unlimited_limiter,
+       apply_limiter
 
 """
     greet(name::AbstractString = "world")
