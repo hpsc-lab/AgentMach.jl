@@ -36,6 +36,7 @@ velocity
 mesh
 boundary_conditions
 pde
+source
 setup_linear_advection_problem
 LinearAdvectionState
 ```
@@ -45,6 +46,7 @@ LinearAdvectionState
 ```@docs
 CompressibleEuler
 CompressibleEulerProblem
+source
 setup_compressible_euler_problem
 CompressibleEulerState
 primitive_variables

@@ -66,7 +66,7 @@ function run_kelvin_helmholtz(; nx::Int = 256,
         end
         dt > 0 || throw(ArgumentError("Encountered non-positive time step"))
 
-        rk2_step!(state, problem, dt)
+        rk2_step!(state, problem, dt; t = sim_time)
         sim_time += dt
         step += 1
 

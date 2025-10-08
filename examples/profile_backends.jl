@@ -11,8 +11,12 @@ function profile(label, setup)
     println("\n== $label ==")
     for (name, state, prob, dt, steps) in setup()
         GC.gc()
-        elapsed = @elapsed for _ in 1:steps
-            rk2_step!(state, prob, dt)
+        elapsed = @elapsed begin
+            current_time = 0.0
+            for _ in 1:steps
+                rk2_step!(state, prob, dt; t = current_time)
+                current_time += dt
+            end
         end
         println(rpad(name, 10), ": ", round(elapsed, digits=3), " s")
     end

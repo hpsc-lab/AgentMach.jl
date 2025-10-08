@@ -224,19 +224,21 @@ end
 end
 
 """
-    rk2_step!(state, problem, dt)
+    rk2_step!(state, problem, dt; t=0)
 
 Advance the solution stored in `state` by a single explicit second-order
-Runge-Kutta step of size `dt`.
+Runge-Kutta step of size `dt`. The optional keyword `t` supplies the physical
+time associated with the stage and is forwarded to any registered source term.
 """
 function rk2_step!(state::LinearAdvectionState,
                    problem::LinearAdvectionProblem,
-                   dt::Real)
+                   dt::Real;
+                   t::Real = 0)
     backend_obj = backend(state)
     if backend_obj isa SerialBackend
-        return _rk2_step_serial!(state, problem, dt)
+        return _rk2_step_serial!(state, problem, dt, t)
     elseif backend_obj isa KernelAbstractionsBackend
-        return _rk2_step_linear_advection_ka!(state, problem, dt, backend_obj)
+        return _rk2_step_linear_advection_ka!(state, problem, dt, backend_obj, t)
     else
         throw(ArgumentError("Unsupported execution backend $(describe(backend_obj)) for linear advection"))
     end
@@ -244,29 +246,32 @@ end
 
 function rk2_step!(state::CompressibleEulerState,
                    problem::CompressibleEulerProblem,
-                   dt::Real)
+                   dt::Real;
+                   t::Real = 0)
     backend_obj = backend(state)
     if backend_obj isa SerialBackend
-        return _rk2_step_serial!(state, problem, dt)
+        return _rk2_step_serial!(state, problem, dt, t)
     elseif backend_obj isa KernelAbstractionsBackend
-        return _rk2_step_euler_ka!(state, problem, dt, backend_obj)
+        return _rk2_step_euler_ka!(state, problem, dt, backend_obj, t)
     else
         throw(ArgumentError("Unsupported execution backend $(describe(backend_obj)) for compressible Euler"))
     end
 end
 
-function _rk2_step_serial!(state, problem, dt::Real)
+function _rk2_step_serial!(state, problem, dt::Real, t::Real)
     u = solution(state)
     ws = workspace(state)
     Tsol = eltype(u)
     dtT = convert(Tsol, dt)
     half = convert(Tsol, 0.5)
+    tT = convert(Tsol, t)
+    t_stage = tT + dtT
     timer = simulation_timers()
 
     @timeit timer "RK2 step" begin
-        @timeit timer "RHS compute" compute_rhs!(ws.k1, u, problem)
+        @timeit timer "RHS compute" compute_rhs!(ws.k1, u, problem, tT)
         @timeit timer "Stage predictor" _rk2_stage_predict!(ws.stage, u, ws.k1, dtT)
-        @timeit timer "RHS compute" compute_rhs!(ws.k2, ws.stage, problem)
+        @timeit timer "RHS compute" compute_rhs!(ws.k2, ws.stage, problem, t_stage)
         @timeit timer "Solution update" _rk2_solution_update!(u, ws.k1, ws.k2, dtT * half)
     end
 
@@ -276,7 +281,8 @@ end
 function _rk2_step_linear_advection_ka!(state::LinearAdvectionState,
                                         problem::LinearAdvectionProblem,
                                         dt::Real,
-                                        backend_obj::KernelAbstractionsBackend)
+                                        backend_obj::KernelAbstractionsBackend,
+                                        t::Real)
     u_field = solution(state)
     ws = workspace(state)
     mesh_obj = mesh(problem)
@@ -291,6 +297,8 @@ function _rk2_step_linear_advection_ka!(state::LinearAdvectionState,
     Tsol = eltype(u)
     dtT = convert(Tsol, dt)
     half = convert(Tsol, 0.5)
+    tT = convert(Tsol, t)
+    t_stage = tT + dtT
 
     eq = pde(problem)
     bc = boundary_conditions(problem)
@@ -321,12 +329,14 @@ function _rk2_step_linear_advection_ka!(state::LinearAdvectionState,
     @timeit timer "RK2 step" begin
         @timeit timer "RHS compute" begin
             linear_advection_rhs_kernel!(backend_obj, k1, u, nx, ny, ax, ay, inv2dx, inv2dy)
+            _apply_source!(ws.k1, u_field, problem, tT)
         end
         @timeit timer "Stage predictor" begin
             rk2_stage_kernel!(backend_obj, stage, u, k1, dtT)
         end
         @timeit timer "RHS compute" begin
             linear_advection_rhs_kernel!(backend_obj, k2, stage, nx, ny, ax, ay, inv2dx, inv2dy)
+            _apply_source!(ws.k2, ws.stage, problem, t_stage)
         end
         @timeit timer "Solution update" begin
             rk2_update_kernel!(backend_obj, u, k1, k2, dtT * half)
@@ -339,17 +349,20 @@ end
 function _rk2_step_euler_ka!(state::CompressibleEulerState,
                              problem::CompressibleEulerProblem,
                              dt::Real,
-                             backend_obj::KernelAbstractionsBackend)
+                             backend_obj::KernelAbstractionsBackend,
+                             t::Real)
     u_field = solution(state)
     ws = workspace(state)
     Tsol = eltype(u_field)
     dtT = convert(Tsol, dt)
     half = convert(Tsol, 0.5)
+    tT = convert(Tsol, t)
+    t_stage = tT + dtT
 
     timer = simulation_timers()
 
     @timeit timer "RK2 step" begin
-        @timeit timer "RHS compute" _compressible_euler_rhs_ka!(backend_obj, ws.k1, u_field, problem)
+        @timeit timer "RHS compute" _compressible_euler_rhs_ka!(backend_obj, ws.k1, u_field, problem, tT)
         @timeit timer "Stage predictor" begin
             for comp in 1:ncomponents(u_field)
                 rk2_stage_kernel!(backend_obj,
@@ -359,7 +372,7 @@ function _rk2_step_euler_ka!(state::CompressibleEulerState,
                                   dtT)
             end
         end
-        @timeit timer "RHS compute" _compressible_euler_rhs_ka!(backend_obj, ws.k2, ws.stage, problem)
+        @timeit timer "RHS compute" _compressible_euler_rhs_ka!(backend_obj, ws.k2, ws.stage, problem, t_stage)
         @timeit timer "Solution update" begin
             for comp in 1:ncomponents(u_field)
                 rk2_update_kernel!(backend_obj,
@@ -378,6 +391,14 @@ function _compressible_euler_rhs_ka!(backend::KernelAbstractionsBackend,
                                      du::CellField,
                                      u::CellField,
                                      problem::CompressibleEulerProblem)
+    return _compressible_euler_rhs_ka!(backend, du, u, problem, zero(eltype(component(u, 1))))
+end
+
+function _compressible_euler_rhs_ka!(backend::KernelAbstractionsBackend,
+                                     du::CellField,
+                                     u::CellField,
+                                     problem::CompressibleEulerProblem,
+                                     t)
     mesh_obj = mesh(problem)
     nx, ny = size(mesh_obj)
     eq = pde(problem)
@@ -409,6 +430,7 @@ function _compressible_euler_rhs_ka!(backend::KernelAbstractionsBackend,
            ρ, rhou, rhov, E,
            γ, inv_dx, inv_dy; ndrange = (nx, ny))
     KernelAbstractions.synchronize(device)
+    _apply_source!(du, u, problem, t)
     return du
 end
 
@@ -440,23 +462,50 @@ end
     return u
 end
 
+@inline function _apply_source!(du, u, problem, t)
+    src = source(problem)
+    if src !== nothing
+        src(du, u, problem, t)
+    end
+    return du
+end
+
 """
-    compute_rhs!(du, u, problem)
+    compute_rhs!(du, u, problem [, t])
 
 Populate `du` with the spatial derivative of `u` for the PDE described by
 `problem`. Linear advection problems use a second-order upwind stencil, while
-compressible Euler problems employ slope-limited Rusanov fluxes.
+compressible Euler problems employ slope-limited Rusanov fluxes. When a
+volumetric source callback is attached to the problem, it is invoked after the
+flux divergence has been accumulated. The optional argument `t` supplies the
+integration time associated with the evaluation.
 """
 function compute_rhs!(du::CellField,
                       u::CellField,
                       problem::LinearAdvectionProblem)
-    return _linear_advection_rhs!(component(du, 1), component(u, 1), problem)
+    return compute_rhs!(du, u, problem, zero(eltype(component(u, 1))))
+end
+
+function compute_rhs!(du::CellField,
+                      u::CellField,
+                      problem::LinearAdvectionProblem,
+                      t)
+    _linear_advection_rhs!(component(du, 1), component(u, 1), problem)
+    return _apply_source!(du, u, problem, t)
 end
 
 function compute_rhs!(du::AbstractArray{T,2},
                       u::AbstractArray{T,2},
                       problem::LinearAdvectionProblem) where {T}
-    return _linear_advection_rhs!(du, u, problem)
+    return compute_rhs!(du, u, problem, zero(T))
+end
+
+function compute_rhs!(du::AbstractArray{T,2},
+                      u::AbstractArray{T,2},
+                      problem::LinearAdvectionProblem,
+                      t) where {T}
+    _linear_advection_rhs!(du, u, problem)
+    return _apply_source!(du, u, problem, t)
 end
 
 function _linear_advection_rhs!(du::AbstractArray{T,2},
@@ -520,15 +569,31 @@ end
 function compute_rhs!(du::CellField,
                       u::CellField,
                       problem::CompressibleEulerProblem)
-    return _compressible_euler_rhs!(du, u, problem)
+    return compute_rhs!(du, u, problem, zero(eltype(component(u, 1))))
+end
+
+function compute_rhs!(du::CellField,
+                      u::CellField,
+                      problem::CompressibleEulerProblem,
+                      t)
+    _compressible_euler_rhs!(du, u, problem)
+    return _apply_source!(du, u, problem, t)
 end
 
 function compute_rhs!(du::AbstractArray{T,3},
                       u::AbstractArray{T,3},
                       problem::CompressibleEulerProblem) where {T}
+    return compute_rhs!(du, u, problem, zero(T))
+end
+
+function compute_rhs!(du::AbstractArray{T,3},
+                      u::AbstractArray{T,3},
+                      problem::CompressibleEulerProblem,
+                      t) where {T}
     du_field = CellField(ntuple(i -> view(du, i, :, :), Val(_EulerVarCount)))
     u_field = CellField(ntuple(i -> view(u, i, :, :), Val(_EulerVarCount)))
     _compressible_euler_rhs!(du_field, u_field, problem)
+    _apply_source!(du_field, u_field, problem, t)
     return du
 end
 

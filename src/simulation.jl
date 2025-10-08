@@ -37,9 +37,12 @@ function run_linear_advection!(state::LinearAdvectionState,
     cfl = @timeit timer "CFL number" cfl_number(problem, effective_dt)
     history = record_cfl ? Float64[] : nothing
 
+    current_time = 0.0
+
     @timeit timer "Time integration" begin
         for step in 1:steps
-            rk2_step!(state, problem, effective_dt)
+            rk2_step!(state, problem, effective_dt; t = current_time)
+            current_time += effective_dt
 
             if callback !== nothing
                 callback(step, state, problem, effective_dt)
@@ -57,7 +60,7 @@ function run_linear_advection!(state::LinearAdvectionState,
 
     result = (; dt = effective_dt,
                steps = steps,
-               final_time = steps * effective_dt,
+               final_time = current_time,
                cfl = cfl,
                cfl_history = history)
 
@@ -120,7 +123,7 @@ function run_compressible_euler!(state::CompressibleEulerState,
             end
             current_dt > 0 || throw(ArgumentError("Encountered non-positive time step during integration"))
 
-            rk2_step!(state, problem, current_dt)
+            rk2_step!(state, problem, current_dt; t = total_time)
             total_time += current_dt
 
             last_cfl = @timeit timer "CFL number" cfl_number(problem, state, current_dt)

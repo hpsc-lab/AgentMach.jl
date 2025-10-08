@@ -64,6 +64,28 @@ order of accuracy. You should expect second-order convergence (EOC ≈ 2.0) once
 the mesh is sufficiently fine. The serial path remains the default, so simple
 invocations continue to run on the CPU without any extra keywords.
 
+## Compressible Euler Convergence Study
+
+CPU:
+
+```
+julia --project=run examples/convergence_compressible_euler.jl
+```
+
+Metal GPU:
+
+```
+julia --project=run -e 'using Metal; include("examples/convergence_compressible_euler.jl"); run_euler_convergence_study(backend=:metal, levels=4)'
+```
+
+This driver verifies second-order accuracy for the compressible Euler solver
+with a manufactured solution on a periodic square. A sinusoidal state is used
+to generate volumetric forcing, ensuring the analytical fields remain an exact
+solution. The run begins on a 64×64 mesh, refines through three additional
+levels, and advances only to `t = 0.05` so the step count stays modest. For each
+resolution the script reports conserved-variable L² errors `(ρ, ρu, ρv, E)`
+together with their per-component convergence rates.
+
 ## Kelvin–Helmholtz Instability (Compressible Euler)
 
 CPU:

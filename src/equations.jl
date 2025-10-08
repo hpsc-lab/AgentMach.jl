@@ -31,20 +31,29 @@ Return the constant advection velocity associated with `eq`.
 velocity(eq::LinearAdvection) = eq.velocity
 
 """
-    LinearAdvectionProblem(mesh, bc, equation)
+    LinearAdvectionProblem(mesh, bc, equation, [source])
 
 Bundle the mesh, boundary conditions, and PDE description for the linear
-advection equation.
+advection equation. The optional `source` callback receives `(du, u, problem, t)`
+and may mutate `du` in-place to add volumetric forcing.
 """
-struct LinearAdvectionProblem{M,B,T}
+struct LinearAdvectionProblem{M,B,T,S}
     mesh::M
     boundary_conditions::B
     equation::LinearAdvection{T}
+    source::S
     function LinearAdvectionProblem(mesh::M,
                                     boundary_conditions::B,
-                                    equation::LinearAdvection{T}) where {M,B,T}
-        new{M,B,T}(mesh, boundary_conditions, equation)
+                                    equation::LinearAdvection{T},
+                                    source::S) where {M,B,T,S}
+        new{M,B,T,S}(mesh, boundary_conditions, equation, source)
     end
+end
+
+function LinearAdvectionProblem(mesh::M,
+                                boundary_conditions::B,
+                                equation::LinearAdvection{T}) where {M,B,T}
+    return LinearAdvectionProblem(mesh, boundary_conditions, equation, nothing)
 end
 
 """
@@ -69,20 +78,31 @@ Return the equation-of-motion descriptor stored within `problem`.
 pde(problem::LinearAdvectionProblem) = problem.equation
 
 """
-    setup_linear_advection_problem(nx, ny; lengths=(1.0, 1.0), origin=(0.0, 0.0), velocity=(1.0, 0.0))
+    source(problem)
+
+Return the volumetric source callback associated with `problem`, or `nothing`
+if no source is registered.
+"""
+source(problem::LinearAdvectionProblem) = problem.source
+
+"""
+    setup_linear_advection_problem(nx, ny; lengths=(1.0, 1.0), origin=(0.0, 0.0),
+                                   velocity=(1.0, 0.0), source=nothing)
 
 Create a linear advection problem on a structured mesh with periodic boundary
-conditions along both axes.
+conditions along both axes. Supply `source` with a function of
+`(du, u, problem, t)` to append volumetric forcing contributions.
 """
 function setup_linear_advection_problem(nx::Integer,
                                         ny::Integer;
                                         lengths::NTuple{2,<:Real} = (1.0, 1.0),
                                         origin::NTuple{2,<:Real} = (0.0, 0.0),
-                                        velocity::NTuple{2,<:Real} = (1.0, 0.0))
+                                        velocity::NTuple{2,<:Real} = (1.0, 0.0),
+                                        source = nothing)
     mesh = StructuredMesh(nx, ny; lengths = lengths, origin = origin)
     bc = PeriodicBoundaryConditions()
     eq = LinearAdvection(velocity)
-    return LinearAdvectionProblem(mesh, bc, eq)
+    return LinearAdvectionProblem(mesh, bc, eq, source)
 end
 
 """
@@ -104,20 +124,29 @@ end
 gamma(eq::CompressibleEuler) = eq.gamma
 
 """
-    CompressibleEulerProblem(mesh, bc, equation)
+    CompressibleEulerProblem(mesh, bc, equation, [source])
 
 Bundle the mesh, boundary conditions, and PDE description for the 2D
-compressible Euler equations.
+compressible Euler equations. The optional `source` callback is invoked as
+`source(du, u, problem, t)` to accumulate volumetric forcing.
 """
-struct CompressibleEulerProblem{M,B,T}
+struct CompressibleEulerProblem{M,B,T,S}
     mesh::M
     boundary_conditions::B
     equation::CompressibleEuler{T}
+    source::S
     function CompressibleEulerProblem(mesh::M,
                                       boundary_conditions::B,
-                                      equation::CompressibleEuler{T}) where {M,B,T}
-        new{M,B,T}(mesh, boundary_conditions, equation)
+                                      equation::CompressibleEuler{T},
+                                      source::S) where {M,B,T,S}
+        new{M,B,T,S}(mesh, boundary_conditions, equation, source)
     end
+end
+
+function CompressibleEulerProblem(mesh::M,
+                                  boundary_conditions::B,
+                                  equation::CompressibleEuler{T}) where {M,B,T}
+    return CompressibleEulerProblem(mesh, boundary_conditions, equation, nothing)
 end
 
 """
@@ -141,22 +170,28 @@ Return the equation-of-motion descriptor stored within `problem`.
 """
 pde(problem::CompressibleEulerProblem) = problem.equation
 
+source(problem::CompressibleEulerProblem) = problem.source
+
 """
     setup_compressible_euler_problem(nx, ny; lengths=(1.0, 1.0), origin=(0.0, 0.0),
-                                     gamma=1.4, boundary_conditions=PeriodicBoundaryConditions())
+                                     gamma=1.4,
+                                     boundary_conditions=PeriodicBoundaryConditions(),
+                                     source=nothing)
 
 Create a compressible Euler problem on a structured mesh with configurable
-boundary conditions (defaults to fully periodic).
+boundary conditions (defaults to fully periodic). Provide a `source` callback
+with signature `(du, u, problem, t)` to add volumetric forcing in-place.
 """
 function setup_compressible_euler_problem(nx::Integer,
                                           ny::Integer;
                                           lengths::NTuple{2,<:Real} = (1.0, 1.0),
                                           origin::NTuple{2,<:Real} = (0.0, 0.0),
                                           gamma::Real = 1.4,
-                                          boundary_conditions::AbstractBoundaryConditions = PeriodicBoundaryConditions())
+                                          boundary_conditions::AbstractBoundaryConditions = PeriodicBoundaryConditions(),
+                                          source = nothing)
     mesh = StructuredMesh(nx, ny; lengths = lengths, origin = origin)
     eq = CompressibleEuler(; gamma = gamma)
-    return CompressibleEulerProblem(mesh, boundary_conditions, eq)
+    return CompressibleEulerProblem(mesh, boundary_conditions, eq, source)
 end
 
 """
