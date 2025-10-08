@@ -206,6 +206,19 @@ end
         @test out == plot_path
         @test isfile(plot_path)
     end
+
+    # Ensure other example scripts load without runtime errors
+    example_scripts = [
+        "convergence_linear_advection.jl",
+        "convergence_compressible_euler.jl",
+        "kelvin_helmholtz_euler.jl",
+        "profile_backends.jl",
+    ]
+    for script in example_scripts
+        @testset "example $(script)" begin
+            include(joinpath(@__DIR__, "..", "examples", script))
+        end
+    end
 end
 
 include("test_compressible_euler.jl")
