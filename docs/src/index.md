@@ -1,5 +1,11 @@
 # CodexMach.jl
 
+[![docs | dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://hpsc-lab.github.io/CodexMach.jl/)
+[![CI](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/hpsc-lab/CodexMach.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/hpsc-lab/CodexMach.jl)
+[![Coveralls](https://coveralls.io/repos/github/hpsc-lab/CodexMach.jl/badge.svg?branch=main)](https://coveralls.io/github/hpsc-lab/CodexMach.jl?branch=main)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/hpsc-lab/CodexMach.jl/blob/main/LICENSE)
+
 CodexMach.jl is a playground for building high-performance computational fluid
 dynamics (CFD) solvers in Julia. The package assembles structured meshes,
 configurable physics kernels, and explicit time integration building blocks into

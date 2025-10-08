@@ -46,7 +46,7 @@ julia> include("/path/to/CodexMach.jl/docs/make.jl")
 The generated site is written to `docs/build/`. Open `index.html` in your
 browser to browse the manual.
 
-The hosted manual is published at [https://schlotm.github.io/CodexMach.jl/dev](https://schlotm.github.io/CodexMach.jl/dev).
+The hosted manual is published at [https://hpsc-lab.github.io/CodexMach.jl/](https://hpsc-lab.github.io/CodexMach.jl/).
 
 ## Next Steps
 
