@@ -31,6 +31,30 @@ julia> import Pkg; Pkg.activate("/path/to/AgentMach.jl"); Pkg.test()
 The tests cover mesh construction, boundary-condition plumbing, and the explicit
 RK2 integrator for both equation sets.
 
+## Visual Check: Linear Advection Pulse
+
+After the tests pass, generate a quick visual confirmation that the linear
+advection driver and plotting stack work on your machine. The snippet below
+transports a compact Gaussian pulse across a periodic square domain and renders
+the final density field with `Plots.jl`:
+
+```julia
+julia> using AgentMach, Plots
+julia> problem = setup_linear_advection_problem(128, 128; velocity = (0.5, -0.25))
+julia> init(x, y) = exp(-80 * ((x - 0.25)^2 + (y - 0.5)^2))
+julia> state = LinearAdvectionState(problem; init)
+julia> run_linear_advection!(state, problem; steps = 200, dt = 0.0025);
+julia> heatmap(AgentMach.scalar_component(solution(state));
+               aspect_ratio = 1,
+               color = :turbo,
+               xlabel = "x",
+               ylabel = "y",
+               title = "Linear advection after one period")
+```
+
+Switch the state construction to `LinearAdvectionState(problem; init, backend =
+KernelAbstractionsBackend(:metal))` (or `:cuda`) to exercise the GPU kernels.
+
 ## Building the Documentation
 
 The documentation in this folder is built with Documenter.jl. To generate the

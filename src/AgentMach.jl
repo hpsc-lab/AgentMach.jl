@@ -16,8 +16,7 @@ include("equations.jl")
 include("time_integration.jl")
 include("simulation.jl")
 
-export greet,
-       StructuredMesh,
+export StructuredMesh,
        cell_centers,
        spacing,
        origin,
@@ -71,14 +70,5 @@ export greet,
        minmod_limiter,
        unlimited_limiter,
        apply_limiter
-
-"""
-    greet(name::AbstractString = "world")
-
-Return a friendly greeting so downstream users can smoke-test that the package is correctly installed.
-"""
-function greet(name::AbstractString = "world")
-    return "Hello, $(name)! Welcome to AgentMach."
-end
 
 end # module

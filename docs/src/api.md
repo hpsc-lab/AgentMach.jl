@@ -4,12 +4,6 @@
 CurrentModule = AgentMach
 ```
 
-## Utilities
-
-```@docs
-greet
-```
-
 ## Mesh Construction
 
 ```@docs

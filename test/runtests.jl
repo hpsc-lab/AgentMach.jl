@@ -1,11 +1,6 @@
 using Test
 using AgentMach
 
-@testset "AgentMach.jl" begin
-    @test greet() == "Hello, world! Welcome to AgentMach."
-    @test greet("team") == "Hello, team! Welcome to AgentMach."
-end
-
 @testset "StructuredMesh" begin
     mesh = StructuredMesh(4, 2; lengths = (2.0, 1.0), origin = (-1.0, 0.5))
     @test size(mesh) == (4, 2)

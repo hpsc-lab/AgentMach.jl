@@ -23,9 +23,25 @@ Current highlights:
 pkg> activate .
 pkg> instantiate
 julia> using AgentMach
-julia> greet()
-"Hello, world! Welcome to AgentMach."
+
+# Visualise a transported Gaussian pulse
+julia> using Plots
+julia> problem = setup_linear_advection_problem(128, 128; velocity = (0.5, -0.25))
+julia> init(x, y) = exp(-80 * ((x - 0.25)^2 + (y - 0.5)^2))
+julia> state = LinearAdvectionState(problem; init)
+julia> run_linear_advection!(state, problem; steps = 200, dt = 0.0025);
+julia> heatmap(AgentMach.scalar_component(solution(state));
+               aspect_ratio = 1,
+               color = :turbo,
+               xlabel = "x",
+               ylabel = "y",
+               title = "Linear advection after one period")
 ```
+
+The snippet sets up a periodic 2D domain, evolves a compact pulse with the RK2
+driver, and renders the cell-centred field with `Plots.jl`. Swap in
+`KernelAbstractionsBackend(:metal)` (or `:cuda`) via `LinearAdvectionState` to
+confirm GPU kernels are working.
 
 ## Documentation
 
