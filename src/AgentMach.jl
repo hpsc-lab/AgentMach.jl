@@ -1,8 +1,8 @@
-module CodexMach
+module AgentMach
 
 using TimerOutputs
 
-const _SIMULATION_TIMERS = TimerOutput("CodexMach Simulation")
+const _SIMULATION_TIMERS = TimerOutput("AgentMach Simulation")
 
 simulation_timers() = _SIMULATION_TIMERS
 
@@ -78,7 +78,7 @@ export greet,
 Return a friendly greeting so downstream users can smoke-test that the package is correctly installed.
 """
 function greet(name::AbstractString = "world")
-    return "Hello, $(name)! Welcome to CodexMach."
+    return "Hello, $(name)! Welcome to AgentMach."
 end
 
 end # module

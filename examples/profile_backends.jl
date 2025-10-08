@@ -1,7 +1,7 @@
-using CodexMach
+using AgentMach
 try
     using Metal
-    CodexMach.register_backend!(:metal, () -> Metal.MetalBackend())
+    AgentMach.register_backend!(:metal, () -> Metal.MetalBackend())
     println("Metal backend registered")
 catch err
     println("Metal unavailable: ", err)

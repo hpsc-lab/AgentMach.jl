@@ -1,10 +1,10 @@
 # Getting Started
 
 ```@meta
-CurrentModule = CodexMach
+CurrentModule = AgentMach
 ```
 
-Follow the steps below to set up CodexMach.jl for local development and to verify
+Follow the steps below to set up AgentMach.jl for local development and to verify
 that the package is working as intended.
 
 ## Installation
@@ -13,7 +13,7 @@ that the package is working as intended.
 2. Clone the repository and instantiate the package environment:
 
    ```julia
-   julia> import Pkg; Pkg.activate("/path/to/CodexMach.jl"); Pkg.instantiate()
+   julia> import Pkg; Pkg.activate("/path/to/AgentMach.jl"); Pkg.instantiate()
    ```
 
    Instantiation resolves both runtime and test dependencies so you can execute
@@ -25,7 +25,7 @@ Run the unit tests to confirm your toolchain is healthy and the finite-volume
 kernels behave as expected:
 
 ```julia
-julia> import Pkg; Pkg.activate("/path/to/CodexMach.jl"); Pkg.test()
+julia> import Pkg; Pkg.activate("/path/to/AgentMach.jl"); Pkg.test()
 ```
 
 The tests cover mesh construction, boundary-condition plumbing, and the explicit
@@ -38,15 +38,15 @@ HTML output locally, run:
 
 ```julia
 julia> import Pkg
-julia> Pkg.activate("/path/to/CodexMach.jl/docs")
+julia> Pkg.activate("/path/to/AgentMach.jl/docs")
 julia> Pkg.instantiate()
-julia> include("/path/to/CodexMach.jl/docs/make.jl")
+julia> include("/path/to/AgentMach.jl/docs/make.jl")
 ```
 
 The generated site is written to `docs/build/`. Open `index.html` in your
 browser to browse the manual.
 
-The hosted manual is published at [https://hpsc-lab.github.io/CodexMach.jl/](https://hpsc-lab.github.io/CodexMach.jl/).
+The hosted manual is published at [https://hpsc-lab.github.io/AgentMach.jl/](https://hpsc-lab.github.io/AgentMach.jl/).
 
 ## Next Steps
 

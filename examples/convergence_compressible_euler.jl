@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-using CodexMach
+using AgentMach
 using Printf
 using KernelAbstractions
 
@@ -202,7 +202,7 @@ function _manufactured_source_factory(params, kx, ky, γ, backend_obj)
         γT = T(γ)
 
         if backend_obj isa KernelAbstractionsBackend
-            device = CodexMach._resolve_ka_device(backend_obj.device)
+            device = AgentMach._resolve_ka_device(backend_obj.device)
             kernel = backend_obj.workgroupsize === nothing ?
                 _manufactured_source_kernel!(device) :
                 _manufactured_source_kernel!(device, backend_obj.workgroupsize)

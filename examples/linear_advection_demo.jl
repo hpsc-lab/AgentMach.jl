@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-using CodexMach
+using AgentMach
 
 """
     run_linear_advection_demo(; nx=512, ny=256, lengths=(2.0, 1.0),
@@ -213,8 +213,8 @@ end
 function _write_state_csv(path::AbstractString,
                           problem::LinearAdvectionProblem,
                           state::AbstractArray)
-    mesh = CodexMach.mesh(problem)
-    centers_x, centers_y = CodexMach.cell_centers(mesh)
+    mesh = AgentMach.mesh(problem)
+    centers_x, centers_y = AgentMach.cell_centers(mesh)
     nx, ny = size(mesh)
 
     open(path, "w") do io

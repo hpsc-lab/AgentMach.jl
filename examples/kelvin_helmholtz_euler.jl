@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-using CodexMach
+using AgentMach
 using Printf
 using Plots
 
@@ -54,7 +54,7 @@ function run_kelvin_helmholtz(; nx::Int = 256,
     last_cfl = NaN
     records = diagnostics_path === nothing ? nothing : Vector{NamedTuple{(:step, :time, :cfl, :kinetic_energy),NTuple{4,Float64}}}()
     prim_buffers = primitive_variables(problem, solution(state);
-                                       backend = CodexMach.backend(state))
+                                       backend = AgentMach.backend(state))
     last_progress = time()
     centers_x, centers_y = cell_centers(mesh(problem))
     animation_obj = animation_path === nothing ? nothing : Animation()
@@ -153,7 +153,7 @@ function _volume_average_kinetic_energy(state::CompressibleEulerState,
                                         problem::CompressibleEulerProblem,
                                         buffers)
     prim = primitive_variables(problem, solution(state);
-                                backend = CodexMach.backend(state),
+                                backend = AgentMach.backend(state),
                                 rho_out = buffers.rho,
                                 u_out = buffers.u,
                                 v_out = buffers.v,
@@ -198,7 +198,7 @@ function _write_khi_pdf(path::AbstractString,
                         centers_x,
                         centers_y)
     prim = primitive_variables(problem, solution(state);
-                                backend = CodexMach.backend(state),
+                                backend = AgentMach.backend(state),
                                 rho_out = buffers.rho,
                                 u_out = buffers.u,
                                 v_out = buffers.v,

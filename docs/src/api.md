@@ -1,7 +1,7 @@
 # API Reference
 
 ```@meta
-CurrentModule = CodexMach
+CurrentModule = AgentMach
 ```
 
 ## Utilities
@@ -36,7 +36,7 @@ velocity
 mesh
 boundary_conditions
 pde
-source(::CodexMach.LinearAdvectionProblem)
+source(::AgentMach.LinearAdvectionProblem)
 setup_linear_advection_problem
 LinearAdvectionState
 ```
@@ -46,8 +46,8 @@ LinearAdvectionState
 ```@docs
 CompressibleEuler
 CompressibleEulerProblem
-source(::CodexMach.CompressibleEulerProblem)
-limiter(::CodexMach.CompressibleEulerProblem)
+source(::AgentMach.CompressibleEulerProblem)
+limiter(::AgentMach.CompressibleEulerProblem)
 setup_compressible_euler_problem
 CompressibleEulerState
 primitive_variables

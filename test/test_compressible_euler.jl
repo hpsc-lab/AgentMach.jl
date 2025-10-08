@@ -1,5 +1,5 @@
 using Test
-using CodexMach
+using AgentMach
 
 @testset "Compressible Euler" begin
     nx, ny = 32, 32

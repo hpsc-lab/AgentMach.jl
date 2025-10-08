@@ -1,4 +1,4 @@
-name = "CodexMach"
+name = "AgentMach"
 uuid = "dbf7be03-f09c-4874-9d54-616eaa9cc35e"
 authors = ["Michael Schlottke-Lakemper <michael.schlottke-lakemper@uni-a.de>"]
 version = "0.1.0"
@@ -17,8 +17,8 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 
 [extensions]
-CodexMachCUDAExt = "CUDA"
-CodexMachMetalExt = "Metal"
+AgentMachCUDAExt = "CUDA"
+AgentMachMetalExt = "Metal"
 
 [compat]
 KernelAbstractions = "0.9.38"

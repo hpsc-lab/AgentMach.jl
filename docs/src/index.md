@@ -1,12 +1,12 @@
-# CodexMach.jl
+# AgentMach.jl
 
-[![docs | dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://hpsc-lab.github.io/CodexMach.jl/)
-[![CI](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/CI.yml)
-[![Codecov](https://codecov.io/gh/hpsc-lab/CodexMach.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/hpsc-lab/CodexMach.jl)
-[![Coveralls](https://coveralls.io/repos/github/hpsc-lab/CodexMach.jl/badge.svg?branch=main)](https://coveralls.io/github/hpsc-lab/CodexMach.jl?branch=main)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/hpsc-lab/CodexMach.jl/blob/main/LICENSE)
+[![docs | dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://hpsc-lab.github.io/AgentMach.jl/)
+[![CI](https://github.com/hpsc-lab/AgentMach.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/hpsc-lab/AgentMach.jl/actions/workflows/CI.yml)
+[![Codecov](https://codecov.io/gh/hpsc-lab/AgentMach.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/hpsc-lab/AgentMach.jl)
+[![Coveralls](https://coveralls.io/repos/github/hpsc-lab/AgentMach.jl/badge.svg?branch=main)](https://coveralls.io/github/hpsc-lab/AgentMach.jl?branch=main)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/hpsc-lab/AgentMach.jl/blob/main/LICENSE)
 
-CodexMach.jl is a playground for building high-performance computational fluid
+AgentMach.jl is a playground for building high-performance computational fluid
 dynamics (CFD) solvers in Julia. The package assembles structured meshes,
 configurable physics kernels, and explicit time integration building blocks into
 a composable toolkit that targets both CPU and GPU execution and scales to
@@ -27,7 +27,7 @@ distributed-memory systems.
 
 ## Architecture Overview
 
-CodexMach keeps mesh generation, physics descriptions, flux evaluations, and time
+AgentMach keeps mesh generation, physics descriptions, flux evaluations, and time
 integration decoupled so the components can be recombined when experimenting
 with new physics or backends. The top-level module simply re-exports the most
 useful types and functions; you can construct meshes and PDE problems directly

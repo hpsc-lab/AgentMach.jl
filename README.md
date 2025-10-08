@@ -1,12 +1,12 @@
-# CodexMach.jl
+# AgentMach.jl
 
-[![docs | dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://hpsc-lab.github.io/CodexMach.jl/)
-[![CI](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/hpsc-lab/CodexMach.jl/actions/workflows/CI.yml)
-[![Codecov](https://codecov.io/gh/hpsc-lab/CodexMach.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/hpsc-lab/CodexMach.jl)
-[![Coveralls](https://coveralls.io/repos/github/hpsc-lab/CodexMach.jl/badge.svg?branch=main)](https://coveralls.io/github/hpsc-lab/CodexMach.jl?branch=main)
+[![docs | dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://hpsc-lab.github.io/AgentMach.jl/)
+[![CI](https://github.com/hpsc-lab/AgentMach.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/hpsc-lab/AgentMach.jl/actions/workflows/CI.yml)
+[![Codecov](https://codecov.io/gh/hpsc-lab/AgentMach.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/hpsc-lab/AgentMach.jl)
+[![Coveralls](https://coveralls.io/repos/github/hpsc-lab/AgentMach.jl/badge.svg?branch=main)](https://coveralls.io/github/hpsc-lab/AgentMach.jl?branch=main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-CodexMach.jl is a Julia playground for evaluating how Codex-style AI systems—`gpt-5-codex` in this repository—can design and grow scientific-computing software without direct human-authored code. The long-term objective is a CFD solver that scales to high-performance workloads, combining performance-minded kernels, multithreading, GPU execution, and (eventually) MPI for distributed runs. Contributions are welcome, with one key rule: all code must be produced through tools such as Copilot or Codex; manual patches are intentionally excluded so we can measure the tooling’s capabilities.
+AgentMach.jl is a Julia playground for evaluating how Codex-style AI systems—`gpt-5-codex` in this repository—can design and grow scientific-computing software without direct human-authored code. The long-term objective is a CFD solver that scales to high-performance workloads, combining performance-minded kernels, multithreading, GPU execution, and (eventually) MPI for distributed runs. Contributions are welcome, with one key rule: all code must be produced through tools such as Copilot or Codex; manual patches are intentionally excluded so we can measure the tooling’s capabilities.
 
 Current highlights:
 
@@ -22,14 +22,14 @@ Current highlights:
 ```julia
 pkg> activate .
 pkg> instantiate
-julia> using CodexMach
+julia> using AgentMach
 julia> greet()
-"Hello, world! Welcome to CodexMach."
+"Hello, world! Welcome to AgentMach."
 ```
 
 ## Documentation
 
-Hosted documentation lives at [https://hpsc-lab.github.io/CodexMach.jl/](https://hpsc-lab.github.io/CodexMach.jl/). It covers usage examples, API details, and convergence studies for each physics module.
+Hosted documentation lives at [https://hpsc-lab.github.io/AgentMach.jl/](https://hpsc-lab.github.io/AgentMach.jl/). It covers usage examples, API details, and convergence studies for each physics module.
 
 ## Example simulation
 
@@ -157,7 +157,7 @@ forcing `Float32` to keep Metal hardware supported.
 
 ## Maintainer
 
-CodexMach.jl is maintained by Michael Schlottke-Lakemper
+AgentMach.jl is maintained by Michael Schlottke-Lakemper
 <michael.schlottke-lakemper@uni-a.de>.
 
 ## Provenance
